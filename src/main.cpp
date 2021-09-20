@@ -81,6 +81,11 @@ int main () {
   rei::vkutils::Buffer quadIndexBuffer;
   rei::vkutils::Image testImage;
 
+  VkDescriptorPool descriptorPool;
+  VkDescriptorSetLayout quadDescriptorLayout;
+  VkDescriptorSet quadDescriptorSet;
+  VkSampler quadSampler;
+
   VkPipelineLayout quadPipelineLayout;
   VkPipeline pipelines[PIPELINES_COUNT];
 
@@ -385,8 +390,71 @@ int main () {
     stbi_image_free (pixels);
   }
 
+  { // Create descriptor pool
+    VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1};
+    VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
+    createInfo.maxSets = 1;
+    createInfo.poolSizeCount = 1;
+    createInfo.pPoolSizes = &poolSize;
+
+    VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &descriptorPool));
+  }
+
+  { // Create layout for quad descriptor sampler
+    VkDescriptorSetLayoutBinding binding;
+    binding.binding = 0;
+    binding.descriptorCount = 1;
+    binding.pImmutableSamplers = nullptr;
+    binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+    VkDescriptorSetLayoutCreateInfo createInfo {DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    createInfo.bindingCount = 1;
+    createInfo.pBindings = &binding;
+
+    VK_CHECK (vkCreateDescriptorSetLayout (device, &createInfo, nullptr, &quadDescriptorLayout));
+  }
+
+  { // Create sampler
+    VkSamplerCreateInfo createInfo {SAMPLER_CREATE_INFO};
+    createInfo.minFilter = VK_FILTER_NEAREST;
+    createInfo.magFilter = VK_FILTER_NEAREST;
+    createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+    VK_CHECK (vkCreateSampler (device, &createInfo, nullptr, &quadSampler));
+  }
+
+  { // Allocate quad descriptor
+    VkDescriptorSetAllocateInfo allocationInfo {DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocationInfo.descriptorSetCount = 1;
+    allocationInfo.descriptorPool = descriptorPool;
+    allocationInfo.pSetLayouts = &quadDescriptorLayout;
+
+    VK_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &quadDescriptorSet));
+  }
+
+  {
+    VkDescriptorImageInfo imageInfo;
+    imageInfo.sampler = quadSampler;
+    imageInfo.imageView = testImage.view;
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet writeInfo {WRITE_DESCRIPTOR_SET};
+    writeInfo.dstBinding = 0;
+    writeInfo.descriptorCount = 1;
+    writeInfo.pImageInfo = &imageInfo;
+    writeInfo.dstSet = quadDescriptorSet;
+    writeInfo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+    vkUpdateDescriptorSets (device, 1, &writeInfo, 0, nullptr);
+  }
+
   { // Create quad pipeline layout
     VkPipelineLayoutCreateInfo createInfo {PIPELINE_LAYOUT_CREATE_INFO};
+    createInfo.setLayoutCount = 1;
+    createInfo.pSetLayouts = &quadDescriptorLayout;
     VK_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &quadPipelineLayout));
   }
 
@@ -550,6 +618,7 @@ int main () {
       vkCmdBindPipeline (currentFrame.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[0]);
       vkCmdBindVertexBuffers (currentFrame.commandBuffer, 0, 1, &quadVertexBuffer.handle, &offset);
       vkCmdBindIndexBuffer (currentFrame.commandBuffer, quadIndexBuffer.handle, 0, VK_INDEX_TYPE_UINT16);
+      vkCmdBindDescriptorSets (currentFrame.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, quadPipelineLayout, 0, 1, &quadDescriptorSet, 0, nullptr);
 
       vkCmdDrawIndexed (currentFrame.commandBuffer, 6, 1, 0, 0, 0);
 
@@ -591,6 +660,10 @@ int main () {
 
   for (uint8_t index = 0; index < PIPELINES_COUNT; ++index)
     vkDestroyPipeline (device, pipelines[index], nullptr);
+
+  vkDestroyDescriptorPool (device, descriptorPool, nullptr);
+  vkDestroyDescriptorSetLayout (device, quadDescriptorLayout, nullptr);
+  vkDestroySampler (device, quadSampler, nullptr);
 
   vkDestroyImageView (device, testImage.view, nullptr);
   vmaDestroyImage (allocator, testImage.handle, testImage.allocation);
