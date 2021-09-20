@@ -123,6 +123,7 @@ extern PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
   X (vkCmdBindDescriptorSets)                   \
   X (vkCreateSampler)                           \
   X (vkDestroySampler)                          \
+  X (vkCmdPushConstants)                        \
                                                 \
   X (vkCmdBindVertexBuffers)                    \
   X (vkCmdBindIndexBuffer)                      \

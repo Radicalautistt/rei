@@ -10,6 +10,8 @@
 
 #include <xcb/xcb.h>
 #include <stb/stb_image.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
 #define FRAMES_COUNT 2u
@@ -85,6 +87,9 @@ int main () {
   VkDescriptorSetLayout quadDescriptorLayout;
   VkDescriptorSet quadDescriptorSet;
   VkSampler quadSampler;
+
+  glm::mat4 modelMatrix = glm::translate (glm::mat4 {1.f}, glm::vec3 {0.f, 0.f, 1.f});
+  glm::mat4 mvp = glm::mat4 {1.f} * glm::mat4 {1.f} * modelMatrix;
 
   VkPipelineLayout quadPipelineLayout;
   VkPipeline pipelines[PIPELINES_COUNT];
@@ -452,9 +457,16 @@ int main () {
   }
 
   { // Create quad pipeline layout
+    VkPushConstantRange pushConstantRange;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof (glm::mat4);
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
     VkPipelineLayoutCreateInfo createInfo {PIPELINE_LAYOUT_CREATE_INFO};
     createInfo.setLayoutCount = 1;
+    createInfo.pushConstantRangeCount = 1;
     createInfo.pSetLayouts = &quadDescriptorLayout;
+    createInfo.pPushConstantRanges = &pushConstantRange;
     VK_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &quadPipelineLayout));
   }
 
@@ -619,6 +631,8 @@ int main () {
       vkCmdBindVertexBuffers (currentFrame.commandBuffer, 0, 1, &quadVertexBuffer.handle, &offset);
       vkCmdBindIndexBuffer (currentFrame.commandBuffer, quadIndexBuffer.handle, 0, VK_INDEX_TYPE_UINT16);
       vkCmdBindDescriptorSets (currentFrame.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, quadPipelineLayout, 0, 1, &quadDescriptorSet, 0, nullptr);
+
+      vkCmdPushConstants (currentFrame.commandBuffer, quadPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (glm::mat4), &mvp);
 
       vkCmdDrawIndexed (currentFrame.commandBuffer, 6, 1, 0, 0, 0);
 
