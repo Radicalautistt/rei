@@ -1,9 +1,23 @@
 #include "vk.hpp"
 #include "vkinit.hpp"
+#include "window.hpp"
 #include "vkcommon.hpp"
 
 int main () {
   VulkanContext::init ();
+
+  rei::extra::xcb::Window window;
+
+  { // Create window
+    rei::extra::xcb::WindowCreateInfo createInfo;
+    createInfo.x = 0;
+    createInfo.y = 0;
+    createInfo.width = 640;
+    createInfo.height = 480;
+    createInfo.name = "Rei playground";
+
+    rei::extra::xcb::createWindow (createInfo, window);
+  }
 
   VkInstance instance;
   #ifndef NDEBUG
@@ -45,5 +59,6 @@ int main () {
   #endif
 
   vkDestroyInstance (instance, nullptr);
+  rei::extra::xcb::destroyWindow (window);
   VulkanContext::shutdown ();
 }
