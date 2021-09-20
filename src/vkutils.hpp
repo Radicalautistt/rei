@@ -98,6 +98,17 @@ struct Buffer {
   VkDeviceSize size;
 };
 
+struct TextureAllocationInfo {
+  VkDevice device;
+  VmaAllocator allocator;
+  VkFence waitFence;
+  VkQueue submitQueue;
+  VkCommandPool commandPool;
+
+  uint32_t width, height;
+  const char* pixels;
+};
+
 void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices& output);
 
 void choosePhysicalDevice (
@@ -130,7 +141,10 @@ void submitImmediateCommand (
 );
 
 void allocateBuffer (const BufferAllocationInfo& allocationInfo, Buffer& output);
+void allocateStagingBuffer (VkDevice device, VmaAllocator allocator, VkDeviceSize size, Buffer& output);
 void copyBuffer (const BufferCopyInfo& copyInfo, const Buffer& source, Buffer& destination);
+
+void allocateTexture (const TextureAllocationInfo& allocationInfo, Image& output);
 
 }
 

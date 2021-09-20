@@ -36,5 +36,14 @@ utils/compile_shaders
 # Spir-v binaries
 *.spv
 
+# Assets
+*.png
+*.jpg
+*.jpeg
+*.obj
+*.gltf
+*.rtex
+*.rmesh
+
 # Coc language server configuration
 .ccls

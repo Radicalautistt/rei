@@ -9,6 +9,7 @@
 #include "vkcommon.hpp"
 
 #include <xcb/xcb.h>
+#include <stb/stb_image.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
 #define FRAMES_COUNT 2u
@@ -78,6 +79,7 @@ int main () {
 
   rei::vkutils::Buffer quadVertexBuffer;
   rei::vkutils::Buffer quadIndexBuffer;
+  rei::vkutils::Image testImage;
 
   VkPipelineLayout quadPipelineLayout;
   VkPipeline pipelines[PIPELINES_COUNT];
@@ -304,19 +306,7 @@ int main () {
 
   { // Create vertex buffer for quad
     rei::vkutils::Buffer stagingBuffer;
-
-    {
-      rei::vkutils::BufferAllocationInfo allocationInfo;
-      allocationInfo.device = device;
-      allocationInfo.allocator = allocator;
-      allocationInfo.size = sizeof (quadVertices);
-      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY;
-      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-      allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-      rei::vkutils::allocateBuffer (allocationInfo, stagingBuffer);
-    }
+    rei::vkutils::allocateStagingBuffer (device, allocator, sizeof (quadVertices), stagingBuffer);
 
     VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
     memcpy (stagingBuffer.mapped, quadVertices, sizeof (quadVertices));
@@ -347,19 +337,7 @@ int main () {
 
   { // Create index buffer for quad
     rei::vkutils::Buffer stagingBuffer;
-
-    {
-      rei::vkutils::BufferAllocationInfo allocationInfo;
-      allocationInfo.device = device;
-      allocationInfo.allocator = allocator;
-      allocationInfo.size = sizeof (quadIndices);
-      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY;
-      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-      allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-      rei::vkutils::allocateBuffer (allocationInfo, stagingBuffer);
-    }
+    rei::vkutils::allocateStagingBuffer (device, allocator, sizeof (quadIndices), stagingBuffer);
 
     VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
     memcpy (stagingBuffer.mapped, quadIndices, sizeof (quadIndices));
@@ -386,6 +364,25 @@ int main () {
 
     rei::vkutils::copyBuffer (copyInfo, stagingBuffer, quadIndexBuffer);
     vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
+  }
+
+  { // Create test texture to let quad sample from it
+    int width, height, channels;
+    auto pixels = stbi_load ("assets/schnoz.png", &width, &height, &channels, STBI_rgb_alpha);
+
+    rei::vkutils::TextureAllocationInfo allocationInfo;
+    allocationInfo.device = device;
+    allocationInfo.allocator = allocator;
+    allocationInfo.waitFence = transferFence;
+    allocationInfo.submitQueue = transferQueue;
+    allocationInfo.commandPool = transferCommandPool;
+    allocationInfo.width = SCAST <uint32_t> (width);
+    allocationInfo.height = SCAST <uint32_t> (height);
+    allocationInfo.pixels = RCAST <const char*> (pixels);
+
+    rei::vkutils::allocateTexture (allocationInfo, testImage);
+
+    stbi_image_free (pixels);
   }
 
   { // Create quad pipeline layout
@@ -594,6 +591,9 @@ int main () {
 
   for (uint8_t index = 0; index < PIPELINES_COUNT; ++index)
     vkDestroyPipeline (device, pipelines[index], nullptr);
+
+  vkDestroyImageView (device, testImage.view, nullptr);
+  vmaDestroyImage (allocator, testImage.handle, testImage.allocation);
 
   vmaDestroyBuffer (allocator, quadIndexBuffer.handle, quadIndexBuffer.allocation);
   vmaDestroyBuffer (allocator, quadVertexBuffer.handle, quadVertexBuffer.allocation);

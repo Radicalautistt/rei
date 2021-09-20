@@ -412,6 +412,19 @@ void allocateBuffer (const BufferAllocationInfo& allocationInfo, Buffer& output)
   ));
 }
 
+void allocateStagingBuffer (VkDevice device, VmaAllocator allocator, VkDeviceSize size, Buffer& output) {
+  rei::vkutils::BufferAllocationInfo allocationInfo;
+  allocationInfo.size = size;
+  allocationInfo.device = device;
+  allocationInfo.allocator = allocator;
+  allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY;
+  allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+  allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+  rei::vkutils::allocateBuffer (allocationInfo, output);
+}
+
 void copyBuffer (const BufferCopyInfo& copyInfo, const Buffer& source, Buffer& destination) {
   auto commandBuffer = startImmediateCommand (copyInfo.device, copyInfo.commandPool);
 
@@ -429,6 +442,129 @@ void copyBuffer (const BufferCopyInfo& copyInfo, const Buffer& source, Buffer& d
     copyInfo.waitFence,
     copyInfo.submitQueue
   );
+}
+
+void allocateTexture (const TextureAllocationInfo& allocationInfo, Image& output) {
+  output.format = VK_FORMAT_R8G8B8A8_SRGB;
+
+  VkExtent3D extent {allocationInfo.width, allocationInfo.height, 1};
+  VkDeviceSize size = SCAST <VkDeviceSize> (extent.width * extent.height * 4);
+
+  Buffer stagingBuffer;
+  allocateStagingBuffer (allocationInfo.device, allocationInfo.allocator, size, stagingBuffer);
+
+  VK_CHECK (vmaMapMemory (allocationInfo.allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
+  memcpy (stagingBuffer.mapped, allocationInfo.pixels, size);
+  vmaUnmapMemory (allocationInfo.allocator, stagingBuffer.allocation);
+
+  {
+    VkImageCreateInfo createInfo {IMAGE_CREATE_INFO};
+    createInfo.mipLevels = 1;
+    createInfo.arrayLayers = 1;
+    createInfo.extent = extent;
+    createInfo.format = output.format;
+    createInfo.imageType = VK_IMAGE_TYPE_2D;
+    createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    createInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    VmaAllocationCreateInfo vmaAllocationInfo {};
+    vmaAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    vmaAllocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    VK_CHECK (vmaCreateImage (
+      allocationInfo.allocator,
+      &createInfo,
+      &vmaAllocationInfo,
+      &output.handle,
+      &output.allocation,
+      nullptr
+    ));
+  }
+
+  VkImageSubresourceRange subresourceRange;
+  subresourceRange.levelCount = 1;
+  subresourceRange.layerCount = 1;
+  subresourceRange.baseMipLevel = 0;
+  subresourceRange.baseArrayLayer = 0;
+  subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+  {
+    auto commandBuffer = startImmediateCommand (allocationInfo.device, allocationInfo.commandPool);
+
+    VkImageMemoryBarrier transferBarrier {IMAGE_MEMORY_BARRIER};
+    transferBarrier.image = output.handle;
+    transferBarrier.srcAccessMask = VULKAN_NO_FLAGS;
+    transferBarrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+    transferBarrier.subresourceRange = subresourceRange;
+    transferBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+    vkCmdPipelineBarrier (
+      commandBuffer,
+      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      VK_PIPELINE_STAGE_TRANSFER_BIT,
+      VULKAN_NO_FLAGS,
+      0, nullptr,
+      0, nullptr,
+      1, &transferBarrier
+    );
+
+    VkBufferImageCopy copyRegion;
+    copyRegion.bufferOffset = 0;
+    copyRegion.bufferRowLength = 0;
+    copyRegion.imageExtent = extent;
+    copyRegion.bufferImageHeight = 0;
+
+    copyRegion.imageSubresource.mipLevel = 0;
+    copyRegion.imageSubresource.layerCount = 1;
+    copyRegion.imageSubresource.baseArrayLayer = 0;
+    copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    vkCmdCopyBufferToImage (
+      commandBuffer,
+      stagingBuffer.handle,
+      output.handle,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      1, &copyRegion
+    );
+
+    auto& readBarrier = transferBarrier;
+    readBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    readBarrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+    readBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    readBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    vkCmdPipelineBarrier (
+      commandBuffer,
+      VK_PIPELINE_STAGE_TRANSFER_BIT,
+      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+      VULKAN_NO_FLAGS,
+      0, nullptr,
+      0, nullptr,
+      1, &readBarrier
+    );
+
+    submitImmediateCommand (
+      allocationInfo.device,
+      commandBuffer,
+      allocationInfo.commandPool,
+      allocationInfo.waitFence,
+      allocationInfo.submitQueue
+    );
+  }
+
+  vmaDestroyBuffer (allocationInfo.allocator, stagingBuffer.handle, stagingBuffer.allocation);
+
+  VkImageViewCreateInfo createInfo {IMAGE_VIEW_CREATE_INFO};
+  createInfo.image = output.handle;
+  createInfo.format = output.format;
+  createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  createInfo.subresourceRange = subresourceRange;
+
+  VK_CHECK (vkCreateImageView (allocationInfo.device, &createInfo, nullptr, &output.view));
 }
 
 }
