@@ -354,4 +354,81 @@ void createGraphicsPipelines (
   free (infos);
 }
 
+[[nodiscard]] VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool) {
+  VkCommandBuffer commandBuffer;
+
+  VkCommandBufferAllocateInfo allocationInfo {COMMAND_BUFFER_ALLOCATE_INFO};
+  allocationInfo.commandBufferCount = 1;
+  allocationInfo.commandPool = commandPool;
+
+  VK_CHECK (vkAllocateCommandBuffers (device, &allocationInfo, &commandBuffer));
+
+  VkCommandBufferBeginInfo beginInfo {COMMAND_BUFFER_BEGIN_INFO};
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  VK_CHECK (vkBeginCommandBuffer (commandBuffer, &beginInfo));
+  return commandBuffer;
+}
+
+void submitImmediateCommand (
+  VkDevice device,
+  VkCommandBuffer commandBuffer,
+  VkCommandPool commandPool,
+  VkFence waitFence,
+  VkQueue submitQueue) {
+
+  VK_CHECK (vkEndCommandBuffer (commandBuffer));
+
+  VkSubmitInfo submitInfo {SUBMIT_INFO};
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &commandBuffer;
+
+  VK_CHECK (vkQueueSubmit (submitQueue, 1, &submitInfo, waitFence));
+  VK_CHECK (vkWaitForFences (device, 1, &waitFence, VK_TRUE, ~0ull));
+
+  VK_CHECK (vkResetFences (device, 1, &waitFence));
+  VK_CHECK (vkResetCommandPool (device, commandPool, VULKAN_NO_FLAGS));
+}
+
+
+void allocateBuffer (const BufferAllocationInfo& allocationInfo, Buffer& output) {
+  VkBufferCreateInfo createInfo {BUFFER_CREATE_INFO};
+  createInfo.size = allocationInfo.size;
+  createInfo.usage = allocationInfo.bufferUsage;
+
+  output.size = allocationInfo.size;
+
+  VmaAllocationCreateInfo vmaAllocationInfo {};
+  vmaAllocationInfo.requiredFlags = allocationInfo.requiredFlags;
+  vmaAllocationInfo.usage = SCAST <VmaMemoryUsage> (allocationInfo.memoryUsage);
+
+  VK_CHECK (vmaCreateBuffer (
+    allocationInfo.allocator,
+    &createInfo,
+    &vmaAllocationInfo,
+    &output.handle,
+    &output.allocation,
+    nullptr
+  ));
+}
+
+void copyBuffer (const BufferCopyInfo& copyInfo, const Buffer& source, Buffer& destination) {
+  auto commandBuffer = startImmediateCommand (copyInfo.device, copyInfo.commandPool);
+
+  VkBufferCopy copyRegion;
+  copyRegion.srcOffset = 0;
+  copyRegion.dstOffset = 0;
+  copyRegion.size = source.size;
+
+  vkCmdCopyBuffer (commandBuffer, source.handle, destination.handle, 1, &copyRegion);
+
+  submitImmediateCommand (
+    copyInfo.device,
+    commandBuffer,
+    copyInfo.commandPool,
+    copyInfo.waitFence,
+    copyInfo.submitQueue
+  );
+}
+
 }

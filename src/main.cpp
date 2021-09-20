@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "vk.hpp"
 #include "common.hpp"
@@ -21,6 +22,20 @@ struct Frame {
   VkSemaphore renderSemaphore;
   VkSemaphore presentSemaphore;
 };
+
+struct Vertex2D {
+  float x, y;
+  float u, v;
+};
+
+constexpr Vertex2D quadVertices[4] {
+  {0.5f, 0.5f, 1.f, 1.f},
+  {0.5f, -0.5f, 1.f, 0.f},
+  {-0.5f, -0.5f, 0.f, 0.f},
+  {-0.5f, 0.5f, 0.f, 1.f}
+};
+
+constexpr uint16_t quadIndices[6] {0, 1, 3, 1, 2, 3};
 
 int main () {
   VulkanContext::init ();
@@ -57,6 +72,12 @@ int main () {
   Frame frames[FRAMES_COUNT];
   VkFramebuffer* framebuffers;
   VkClearValue clearValues[2] {};
+
+  VkFence transferFence;
+  VkCommandPool transferCommandPool;
+
+  rei::vkutils::Buffer quadVertexBuffer;
+  rei::vkutils::Buffer quadIndexBuffer;
 
   VkPipelineLayout quadPipelineLayout;
   VkPipeline pipelines[PIPELINES_COUNT];
@@ -262,6 +283,8 @@ int main () {
     VkFenceCreateInfo fenceInfo {FENCE_CREATE_INFO};
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
+    VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &transferCommandPool));
+
     VkSemaphoreCreateInfo semaphoreInfo {SEMAPHORE_CREATE_INFO};
 
     for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
@@ -274,6 +297,93 @@ int main () {
       VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current.renderSemaphore));
       VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current.presentSemaphore));
     }
+
+    fenceInfo.flags = VULKAN_NO_FLAGS;
+    VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &transferFence));
+  }
+
+  { // Create vertex buffer for quad
+    rei::vkutils::Buffer stagingBuffer;
+
+    {
+      rei::vkutils::BufferAllocationInfo allocationInfo;
+      allocationInfo.device = device;
+      allocationInfo.allocator = allocator;
+      allocationInfo.size = sizeof (quadVertices);
+      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY;
+      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+      allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+      rei::vkutils::allocateBuffer (allocationInfo, stagingBuffer);
+    }
+
+    VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
+    memcpy (stagingBuffer.mapped, quadVertices, sizeof (quadVertices));
+    vmaUnmapMemory (allocator, stagingBuffer.allocation);
+
+    {
+      rei::vkutils::BufferAllocationInfo allocationInfo;
+      allocationInfo.device = device;
+      allocationInfo.allocator = allocator;
+      allocationInfo.size = sizeof (quadVertices);
+      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
+      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+      allocationInfo.bufferUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+      rei::vkutils::allocateBuffer (allocationInfo, quadVertexBuffer);
+    }
+
+    rei::vkutils::BufferCopyInfo copyInfo;
+    copyInfo.device = device;
+    copyInfo.waitFence = transferFence;
+    copyInfo.submitQueue = transferQueue;
+    copyInfo.commandPool = transferCommandPool;
+
+    rei::vkutils::copyBuffer (copyInfo, stagingBuffer, quadVertexBuffer);
+  }
+
+  { // Create index buffer for quad
+    rei::vkutils::Buffer stagingBuffer;
+
+    {
+      rei::vkutils::BufferAllocationInfo allocationInfo;
+      allocationInfo.device = device;
+      allocationInfo.allocator = allocator;
+      allocationInfo.size = sizeof (quadIndices);
+      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY;
+      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+      allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+      rei::vkutils::allocateBuffer (allocationInfo, stagingBuffer);
+    }
+
+    VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
+    memcpy (stagingBuffer.mapped, quadIndices, sizeof (quadIndices));
+    vmaUnmapMemory (allocator, stagingBuffer.allocation);
+
+    {
+      rei::vkutils::BufferAllocationInfo allocationInfo;
+      allocationInfo.device = device;
+      allocationInfo.allocator = allocator;
+      allocationInfo.size = sizeof (quadIndices);
+      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
+      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+      allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+      rei::vkutils::allocateBuffer (allocationInfo, quadVertexBuffer);
+    }
+
+    rei::vkutils::BufferCopyInfo copyInfo;
+    copyInfo.device = device;
+    copyInfo.waitFence = transferFence;
+    copyInfo.submitQueue = transferQueue;
+    copyInfo.commandPool = transferCommandPool;
+
+    rei::vkutils::copyBuffer (copyInfo, stagingBuffer, quadVertexBuffer);
   }
 
   { // Create quad pipeline layout
@@ -451,6 +561,12 @@ int main () {
 
   for (uint8_t index = 0; index < PIPELINES_COUNT; ++index)
     vkDestroyPipeline (device, pipelines[index], nullptr);
+
+  vmaDestroyBuffer (allocator, quadIndexBuffer.handle, quadIndexBuffer.allocation);
+  vmaDestroyBuffer (allocator, quadVertexBuffer.handle, quadVertexBuffer.allocation);
+
+  vkDestroyFence (device, transferFence, nullptr);
+  vkDestroyCommandPool (device, transferCommandPool, nullptr);
 
   for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
     auto& current = frames[index];

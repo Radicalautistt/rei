@@ -73,6 +73,31 @@ struct GraphicsPipelineCreateInfo {
   VkPipelineRasterizationStateCreateInfo* rasterizationInfo;
 };
 
+struct BufferAllocationInfo {
+  VkDevice device;
+  VmaAllocator allocator;
+  VkDeviceSize size;
+
+  VkBufferUsageFlags bufferUsage;
+  uint32_t memoryUsage;
+  VkMemoryPropertyFlags requiredFlags;
+};
+
+struct BufferCopyInfo {
+  VkDevice device;
+  VkFence waitFence;
+  VkCommandPool commandPool;
+  VkQueue submitQueue;
+};
+
+struct Buffer {
+  VkBuffer handle;
+  VmaAllocation allocation;
+  void* mapped;
+
+  VkDeviceSize size;
+};
+
 void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices& output);
 
 void choosePhysicalDevice (
@@ -94,6 +119,18 @@ void createGraphicsPipelines (
   const GraphicsPipelineCreateInfo* createInfos,
   VkPipeline* outputs
 );
+
+[[nodiscard]] VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool);
+void submitImmediateCommand (
+  VkDevice device,
+  VkCommandBuffer commandBuffer,
+  VkCommandPool commandPool,
+  VkFence waitFence,
+  VkQueue submitQueue
+);
+
+void allocateBuffer (const BufferAllocationInfo& allocationInfo, Buffer& output);
+void copyBuffer (const BufferCopyInfo& copyInfo, const Buffer& source, Buffer& destination);
 
 }
 
