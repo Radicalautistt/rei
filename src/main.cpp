@@ -1,9 +1,12 @@
 #include <stdio.h>
+
 #include "vk.hpp"
 #include "vkinit.hpp"
 #include "window.hpp"
 #include "vkutils.hpp"
 #include "vkcommon.hpp"
+
+#include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
 int main () {
   VulkanContext::init ();
@@ -31,6 +34,8 @@ int main () {
   VkDevice device;
   uint32_t queueFamilyIndex;
   VkQueue graphicsQueue, presentQueue, transferQueue, computeQueue;
+
+  VmaAllocator allocator;
 
   { // Create instance
     VkApplicationInfo applicationInfo {APPLICATION_INFO};
@@ -70,44 +75,74 @@ int main () {
     VK_CHECK (vkCreateXcbSurfaceKHR (instance, &createInfo, nullptr, &windowSurface));
   }
 
-  { // Choose physical device, create logical device and swapchain
+  { // Choose physical device, create logical device
     rei::vkutils::QueueFamilyIndices indices;
     rei::vkutils::choosePhysicalDevice (instance, windowSurface, indices, physicalDevice);
 
-    { // Logical device
-      VkPhysicalDeviceFeatures enabledFeatures {};
+    VkPhysicalDeviceFeatures enabledFeatures {};
 
-      float queuePriority = 1.f;
-      // NOTE All required queues have the same index on my device,
-      // so I need only one queue create info. Perhaps, I might
-      // handle them more appropriately in the future (so that this can work on different devices),
-      // but for this will do.
-      queueFamilyIndex = indices.graphics;
+    float queuePriority = 1.f;
+    // NOTE All required queues have the same index on my device,
+    // so I need only one queue create info. Perhaps, I might
+    // handle them more appropriately in the future (so that this can work on different devices),
+    // but for this will do.
+    queueFamilyIndex = indices.graphics;
 
-      VkDeviceQueueCreateInfo queueInfo {DEVICE_QUEUE_CREATE_INFO};
-      queueInfo.pQueuePriorities = &queuePriority;
-      queueInfo.queueCount = 1;
-      queueInfo.queueFamilyIndex = queueFamilyIndex;
+    VkDeviceQueueCreateInfo queueInfo {DEVICE_QUEUE_CREATE_INFO};
+    queueInfo.pQueuePriorities = &queuePriority;
+    queueInfo.queueCount = 1;
+    queueInfo.queueFamilyIndex = queueFamilyIndex;
 
-      VkDeviceCreateInfo createInfo {DEVICE_CREATE_INFO};
-      createInfo.queueCreateInfoCount = 1;
-      createInfo.pQueueCreateInfos = &queueInfo;
-      createInfo.pEnabledFeatures = &enabledFeatures;
-      createInfo.enabledExtensionCount = DEVICE_EXTENSIONS_COUNT;
-      createInfo.ppEnabledExtensionNames = rei::vkcommon::requiredDeviceExtensions;
+    VkDeviceCreateInfo createInfo {DEVICE_CREATE_INFO};
+    createInfo.queueCreateInfoCount = 1;
+    createInfo.pQueueCreateInfos = &queueInfo;
+    createInfo.pEnabledFeatures = &enabledFeatures;
+    createInfo.enabledExtensionCount = DEVICE_EXTENSIONS_COUNT;
+    createInfo.ppEnabledExtensionNames = rei::vkcommon::requiredDeviceExtensions;
 
-      VK_CHECK (vkCreateDevice (physicalDevice, &createInfo, nullptr, &device));
+    VK_CHECK (vkCreateDevice (physicalDevice, &createInfo, nullptr, &device));
 
-      VulkanContext::loadDevice (device);
-      vkGetDeviceQueue (device, queueFamilyIndex, 0, &presentQueue);
-      vkGetDeviceQueue (device, queueFamilyIndex, 0, &computeQueue);
-      vkGetDeviceQueue (device, queueFamilyIndex, 0, &graphicsQueue);
-      vkGetDeviceQueue (device, queueFamilyIndex, 0, &transferQueue);
-    }
+    VulkanContext::loadDevice (device);
+    vkGetDeviceQueue (device, queueFamilyIndex, 0, &presentQueue);
+    vkGetDeviceQueue (device, queueFamilyIndex, 0, &computeQueue);
+    vkGetDeviceQueue (device, queueFamilyIndex, 0, &graphicsQueue);
+    vkGetDeviceQueue (device, queueFamilyIndex, 0, &transferQueue);
   }
 
-  vkDestroyDevice (device, nullptr);
+  { // Create allocator
+    // Since I'm loading Vulkan functions dynamically,
+    // I need to manually provide pointers to them to VMA
+    VmaVulkanFunctions vulkanFunctions;
+    vulkanFunctions.vkMapMemory = vkMapMemory;
+    vulkanFunctions.vkFreeMemory = vkFreeMemory;
+    vulkanFunctions.vkUnmapMemory = vkUnmapMemory;
+    vulkanFunctions.vkCreateImage = vkCreateImage;
+    vulkanFunctions.vkDestroyImage = vkDestroyImage;
+    vulkanFunctions.vkCreateBuffer = vkCreateBuffer;
+    vulkanFunctions.vkDestroyBuffer = vkDestroyBuffer;
+    vulkanFunctions.vkCmdCopyBuffer = vkCmdCopyBuffer;
+    vulkanFunctions.vkAllocateMemory = vkAllocateMemory;
+    vulkanFunctions.vkBindImageMemory = vkBindImageMemory;
+    vulkanFunctions.vkBindBufferMemory = vkBindBufferMemory;
+    vulkanFunctions.vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges;
+    vulkanFunctions.vkGetImageMemoryRequirements = vkGetImageMemoryRequirements;
+    vulkanFunctions.vkGetBufferMemoryRequirements = vkGetBufferMemoryRequirements;
+    vulkanFunctions.vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties;
+    vulkanFunctions.vkInvalidateMappedMemoryRanges = vkInvalidateMappedMemoryRanges;
+    vulkanFunctions.vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties;
 
+    VmaAllocatorCreateInfo createInfo {};
+    createInfo.device = device;
+    createInfo.instance = instance;
+    createInfo.physicalDevice = physicalDevice;
+    createInfo.vulkanApiVersion = VULKAN_VERSION;
+    createInfo.pVulkanFunctions = &vulkanFunctions;
+
+    VK_CHECK (vmaCreateAllocator (&createInfo, &allocator));
+  }
+
+  vmaDestroyAllocator (allocator);
+  vkDestroyDevice (device, nullptr);
   vkDestroySurfaceKHR (instance, windowSurface, nullptr);
 
   #ifndef NDEBUG
