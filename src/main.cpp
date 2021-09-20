@@ -11,6 +11,7 @@
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
 #define FRAMES_COUNT 2u
+#define PIPELINES_COUNT 1u
 
 struct Frame {
   VkCommandPool commandPool;
@@ -56,6 +57,9 @@ int main () {
   Frame frames[FRAMES_COUNT];
   VkFramebuffer* framebuffers;
   VkClearValue clearValues[2] {};
+
+  VkPipelineLayout quadPipelineLayout;
+  VkPipeline pipelines[PIPELINES_COUNT];
 
   { // Create instance
     VkApplicationInfo applicationInfo {APPLICATION_INFO};
@@ -272,6 +276,93 @@ int main () {
     }
   }
 
+  { // Create quad pipeline layout
+    VkPipelineLayoutCreateInfo createInfo {PIPELINE_LAYOUT_CREATE_INFO};
+    VK_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &quadPipelineLayout));
+  }
+
+  { // Create graphics pipelines
+    rei::vkutils::GraphicsPipelineCreateInfo createInfos[PIPELINES_COUNT];
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo {PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo {PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+    inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    VkRect2D scissor;
+    scissor.offset = {0, 0};
+    scissor.extent = swapchain.extent;
+
+    VkViewport viewport;
+    viewport.x = 0.f;
+    viewport.y = 0.f;
+    viewport.minDepth = 0.f;
+    viewport.minDepth = 1.f;
+    viewport.width = SCAST <float> (swapchain.extent.width);
+    viewport.height = SCAST <float> (swapchain.extent.height);
+
+    VkPipelineViewportStateCreateInfo viewportInfo {PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+    viewportInfo.scissorCount = 1;
+    viewportInfo.viewportCount = 1;
+    viewportInfo.pScissors = &scissor;
+    viewportInfo.pViewports = &viewport;
+
+    VkPipelineRasterizationStateCreateInfo rasterizationInfo {PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    rasterizationInfo.lineWidth = 1.f;
+    rasterizationInfo.depthBiasEnable = VK_FALSE;
+    rasterizationInfo.depthClampEnable = VK_FALSE;
+    rasterizationInfo.cullMode = VK_CULL_MODE_NONE;
+    rasterizationInfo.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizationInfo.rasterizerDiscardEnable = VK_FALSE;
+    rasterizationInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+
+    VkPipelineMultisampleStateCreateInfo multisampleInfo {PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    multisampleInfo.minSampleShading = 1.f;
+    multisampleInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilInfo {PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    depthStencilInfo.minDepthBounds = 0.f;
+    depthStencilInfo.maxDepthBounds = 1.f;
+
+    depthStencilInfo.depthTestEnable = VK_TRUE;
+    depthStencilInfo.depthWriteEnable = VK_TRUE;
+    depthStencilInfo.stencilTestEnable = VK_FALSE;
+    depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
+    depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+
+    VkPipelineColorBlendAttachmentState blendAttachmentInfo {};
+    blendAttachmentInfo.blendEnable = VK_FALSE,
+    blendAttachmentInfo.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT |
+        VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT |
+        VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo colorBlendInfo {PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+    colorBlendInfo.attachmentCount = 1;
+    colorBlendInfo.logicOpEnable = VK_FALSE;
+    colorBlendInfo.logicOp = VK_LOGIC_OP_COPY;
+    colorBlendInfo.pAttachments = &blendAttachmentInfo;
+
+    // Textured quad pipeline
+    createInfos[0].dynamicInfo = nullptr;
+    createInfos[0].renderPass = renderPass;
+    createInfos[0].layout = quadPipelineLayout;
+    createInfos[0].pixelShaderPath = "assets/shaders/textured_quad.frag.spv";
+    createInfos[0].vertexShaderPath = "assets/shaders/textured_quad.vert.spv";
+
+    createInfos[0].vertexInputInfo = &vertexInputInfo;
+    createInfos[0].inputAssemblyInfo = &inputAssemblyInfo;
+    createInfos[0].viewportInfo = &viewportInfo;
+    createInfos[0].rasterizationInfo = &rasterizationInfo;
+    createInfos[0].multisampleInfo = &multisampleInfo;
+    createInfos[0].colorBlendInfo = &colorBlendInfo;
+    createInfos[0].depthStencilInfo = &depthStencilInfo;
+
+    rei::vkutils::createGraphicsPipelines (device, VK_NULL_HANDLE, PIPELINES_COUNT, createInfos, pipelines);
+  }
+
   { // Render loop
     bool running = true;
     while (running) {
@@ -355,6 +446,11 @@ int main () {
 
   // Wait for gpu to finish rendering of the last frame
   vkDeviceWaitIdle (device);
+
+  vkDestroyPipelineLayout (device, quadPipelineLayout, nullptr);
+
+  for (uint8_t index = 0; index < PIPELINES_COUNT; ++index)
+    vkDestroyPipeline (device, pipelines[index], nullptr);
 
   for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
     auto& current = frames[index];

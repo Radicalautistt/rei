@@ -51,6 +51,28 @@ struct Swapchain {
   Image depthImage;
 };
 
+struct Shaders {
+  VkShaderModule vertex, pixel;
+  VkPipelineShaderStageCreateInfo stages[2];
+};
+
+struct GraphicsPipelineCreateInfo {
+  VkRenderPass renderPass;
+  VkPipelineLayout layout;
+
+  const char* vertexShaderPath;
+  const char* pixelShaderPath;
+
+  VkPipelineDynamicStateCreateInfo* dynamicInfo;
+  VkPipelineViewportStateCreateInfo* viewportInfo;
+  VkPipelineColorBlendStateCreateInfo* colorBlendInfo;
+  VkPipelineMultisampleStateCreateInfo* multisampleInfo;
+  VkPipelineVertexInputStateCreateInfo* vertexInputInfo;
+  VkPipelineDepthStencilStateCreateInfo* depthStencilInfo;
+  VkPipelineInputAssemblyStateCreateInfo* inputAssemblyInfo;
+  VkPipelineRasterizationStateCreateInfo* rasterizationInfo;
+};
+
 void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices& output);
 
 void choosePhysicalDevice (
@@ -62,6 +84,16 @@ void choosePhysicalDevice (
 
 void createSwapchain (const SwapchainCreateInfo& createInfo, Swapchain& output);
 void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain& swapchain);
+
+void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule& output);
+
+void createGraphicsPipelines (
+  VkDevice device,
+  VkPipelineCache pipelineCache,
+  uint32_t count,
+  const GraphicsPipelineCreateInfo* createInfos,
+  VkPipeline* outputs
+);
 
 }
 

@@ -30,7 +30,11 @@
 *.exe
 *.out
 *.app
-
 playground
+utils/compile_shaders
 
+# Spir-v binaries
+*.spv
+
+# Coc language server configuration
 .ccls

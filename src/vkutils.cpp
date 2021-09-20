@@ -280,4 +280,78 @@ void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain& swapc
   vkDestroySwapchainKHR (device, swapchain.handle, nullptr);
 }
 
+void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule& output) {
+  utils::File shaderFile;
+  utils::readFile (relativePath, "rb", shaderFile);
+
+  VkShaderModuleCreateInfo createInfo {SHADER_MODULE_CREATE_INFO};
+  createInfo.codeSize = shaderFile.size;
+  createInfo.pCode = RCAST <uint32_t*> (shaderFile.contents);
+
+  VK_CHECK (vkCreateShaderModule (device, &createInfo, nullptr, &output));
+  free (shaderFile.contents);
+}
+
+void createGraphicsPipelines (
+  VkDevice device,
+  VkPipelineCache pipelineCache,
+  uint32_t count,
+  const GraphicsPipelineCreateInfo* createInfos,
+  VkPipeline* outputs) {
+
+  auto shaders = MALLOC (Shaders, count);
+  auto infos = MALLOC (VkGraphicsPipelineCreateInfo, count);
+  memset (infos, 0, sizeof (VkGraphicsPipelineCreateInfo) * count);
+
+  for (uint32_t index = 0; index < count; ++index) {
+    // This naming is so horrible
+    auto& info = infos[index];
+    auto& currentShader = shaders[index];
+    auto& currentInfo = createInfos[index];
+
+    createShaderModule (device, currentInfo.vertexShaderPath, currentShader.vertex);
+    createShaderModule (device, currentInfo.pixelShaderPath, currentShader.pixel);
+
+    currentShader.stages[0].pName = "main";
+    currentShader.stages[0].pNext = nullptr;
+    currentShader.stages[0].flags = VULKAN_NO_FLAGS;
+    currentShader.stages[0].module = currentShader.vertex;
+    currentShader.stages[0].pSpecializationInfo = nullptr;
+    currentShader.stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    currentShader.stages[0].sType = PIPELINE_SHADER_STAGE_CREATE_INFO;
+
+    currentShader.stages[1].pName = "main";
+    currentShader.stages[1].pNext = nullptr;
+    currentShader.stages[1].flags = VULKAN_NO_FLAGS;
+    currentShader.stages[1].module = currentShader.pixel;
+    currentShader.stages[1].pSpecializationInfo = nullptr;
+    currentShader.stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    currentShader.stages[1].sType = PIPELINE_SHADER_STAGE_CREATE_INFO;
+
+    info.stageCount = 2;
+    info.pStages = currentShader.stages;
+    info.layout = currentInfo.layout;
+    info.renderPass = currentInfo.renderPass;
+    info.pVertexInputState = currentInfo.vertexInputInfo;
+    info.pInputAssemblyState = currentInfo.inputAssemblyInfo;
+    info.pDynamicState = currentInfo.dynamicInfo;
+    info.pViewportState = currentInfo.viewportInfo;
+    info.pRasterizationState = currentInfo.rasterizationInfo;
+    info.pDepthStencilState = currentInfo.depthStencilInfo;
+    info.pMultisampleState = currentInfo.multisampleInfo;
+    info.pColorBlendState = currentInfo.colorBlendInfo;
+    info.sType = GRAPHICS_PIPELINE_CREATE_INFO;
+  }
+
+  VK_CHECK (vkCreateGraphicsPipelines (device, pipelineCache, count, infos, nullptr, outputs));
+
+  for (uint32_t index = 0; index < count; ++index) {
+    vkDestroyShaderModule (device, shaders[index].pixel, nullptr);
+    vkDestroyShaderModule (device, shaders[index].vertex, nullptr);
+  }
+
+  free (shaders);
+  free (infos);
+}
+
 }
