@@ -7,9 +7,19 @@
 #include "vkutils.hpp"
 #include "vkcommon.hpp"
 
+#include <xcb/xcb.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
 #define FRAMES_COUNT 2u
+
+struct Frame {
+  VkCommandPool commandPool;
+  VkCommandBuffer commandBuffer;
+
+  VkFence renderFence;
+  VkSemaphore renderSemaphore;
+  VkSemaphore presentSemaphore;
+};
 
 int main () {
   VulkanContext::init ();
@@ -42,6 +52,8 @@ int main () {
 
   rei::vkutils::Swapchain swapchain;
   VkRenderPass renderPass;
+  uint32_t frameIndex;
+  Frame frames[FRAMES_COUNT];
   VkFramebuffer* framebuffers;
   VkClearValue clearValues[2] {};
 
@@ -232,6 +244,124 @@ int main () {
 
       VK_CHECK (vkCreateFramebuffer (device, &createInfo, nullptr, &framebuffers[index]));
     }
+  }
+
+  { // Create command pools, buffers, fences and semaphores for each frame in flight
+    VkCommandPoolCreateInfo poolInfo {COMMAND_POOL_CREATE_INFO};
+    poolInfo.queueFamilyIndex = queueFamilyIndex;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    VkCommandBufferAllocateInfo bufferInfo {COMMAND_BUFFER_ALLOCATE_INFO};
+    bufferInfo.commandBufferCount = 1;
+    bufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+    VkFenceCreateInfo fenceInfo {FENCE_CREATE_INFO};
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    VkSemaphoreCreateInfo semaphoreInfo {SEMAPHORE_CREATE_INFO};
+
+    for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
+      auto& current = frames[index];
+      VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &current.commandPool));
+
+      bufferInfo.commandPool = current.commandPool;
+      VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current.commandBuffer));
+      VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current.renderFence));
+      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current.renderSemaphore));
+      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current.presentSemaphore));
+    }
+  }
+
+  { // Render loop
+    bool running = true;
+    while (running) {
+      xcb_generic_event_t* event = xcb_poll_for_event (window.connection);
+      if (event) {
+	switch (event->response_type & ~0x80) {
+	  case XCB_KEY_PRESS: {
+	    auto key = RCAST <xcb_key_press_event_t*> (event);
+	    if (key->detail == 9) running = false;
+	    break;
+          }
+	}
+
+	free (event);
+      }
+
+      auto& currentFrame = frames[frameIndex % FRAMES_COUNT];
+
+      VK_CHECK (vkWaitForFences (device, 1, &currentFrame.renderFence, VK_TRUE, ~0ull));
+      VK_CHECK (vkResetFences (device, 1, &currentFrame.renderFence));
+
+      uint32_t imageIndex = 0;
+      VK_CHECK (vkAcquireNextImageKHR (
+        device,
+	swapchain.handle,
+	~0ull,
+	currentFrame.presentSemaphore,
+	VK_NULL_HANDLE,
+	&imageIndex
+      ));
+
+      { // Begin writing to command buffer
+        VkCommandBufferBeginInfo beginInfo {COMMAND_BUFFER_BEGIN_INFO};
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	VK_CHECK (vkBeginCommandBuffer (currentFrame.commandBuffer, &beginInfo));
+      }
+
+      { // Begin render pass
+        VkRenderPassBeginInfo beginInfo {RENDER_PASS_BEGIN_INFO};
+	beginInfo.clearValueCount = 2;
+	beginInfo.pClearValues = clearValues;
+	beginInfo.renderPass = renderPass;
+	beginInfo.renderArea.offset = {0, 0};
+	beginInfo.renderArea.extent = swapchain.extent;
+	beginInfo.framebuffer = framebuffers[imageIndex];
+
+	vkCmdBeginRenderPass (currentFrame.commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+      }
+
+      vkCmdEndRenderPass (currentFrame.commandBuffer);
+      VK_CHECK (vkEndCommandBuffer (currentFrame.commandBuffer));
+
+      { // Submit written commands to a queue
+        VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+        VkSubmitInfo submitInfo {SUBMIT_INFO};
+	submitInfo.commandBufferCount = 1;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pWaitDstStageMask = &waitStage;
+	submitInfo.pCommandBuffers = &currentFrame.commandBuffer;
+	submitInfo.pWaitSemaphores = &currentFrame.presentSemaphore;
+	submitInfo.pSignalSemaphores = &currentFrame.renderSemaphore;
+
+	VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame.renderFence));
+      }
+
+      // Present resulting image
+      VkPresentInfoKHR presentInfo {PRESENT_INFO_KHR};
+      presentInfo.swapchainCount = 1;
+      presentInfo.waitSemaphoreCount = 1;
+      presentInfo.pImageIndices = &imageIndex;
+      presentInfo.pSwapchains = &swapchain.handle;
+      presentInfo.pWaitSemaphores = &currentFrame.renderSemaphore;
+
+      VK_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
+      ++frameIndex;
+    }
+  }
+
+  // Wait for gpu to finish rendering of the last frame
+  vkDeviceWaitIdle (device);
+
+  for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
+    auto& current = frames[index];
+    vkDestroySemaphore (device, current.presentSemaphore, nullptr);
+    vkDestroySemaphore (device, current.renderSemaphore, nullptr);
+    vkDestroyFence (device, current.renderFence, nullptr);
+    vkDestroyCommandPool (device, current.commandPool, nullptr);
   }
 
   for (uint32_t index = 0; index < swapchain.imagesCount; ++index)
