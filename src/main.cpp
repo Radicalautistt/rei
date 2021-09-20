@@ -342,6 +342,7 @@ int main () {
     copyInfo.commandPool = transferCommandPool;
 
     rei::vkutils::copyBuffer (copyInfo, stagingBuffer, quadVertexBuffer);
+    vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
   }
 
   { // Create index buffer for quad
@@ -374,7 +375,7 @@ int main () {
       allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-      rei::vkutils::allocateBuffer (allocationInfo, quadVertexBuffer);
+      rei::vkutils::allocateBuffer (allocationInfo, quadIndexBuffer);
     }
 
     rei::vkutils::BufferCopyInfo copyInfo;
@@ -383,7 +384,8 @@ int main () {
     copyInfo.submitQueue = transferQueue;
     copyInfo.commandPool = transferCommandPool;
 
-    rei::vkutils::copyBuffer (copyInfo, stagingBuffer, quadVertexBuffer);
+    rei::vkutils::copyBuffer (copyInfo, stagingBuffer, quadIndexBuffer);
+    vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
   }
 
   { // Create quad pipeline layout
@@ -394,7 +396,30 @@ int main () {
   { // Create graphics pipelines
     rei::vkutils::GraphicsPipelineCreateInfo createInfos[PIPELINES_COUNT];
 
+    VkVertexInputBindingDescription binding;
+    binding.binding = 0;
+    binding.stride = sizeof (Vertex2D);
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription attributes[2];
+
+    // Position
+    attributes[0].binding = 0;
+    attributes[0].location = 0;
+    attributes[0].offset = offsetof (Vertex2D, x);
+    attributes[0].format = VK_FORMAT_R32G32_SFLOAT;
+
+    // Uv
+    attributes[1].binding = 0;
+    attributes[1].location = 1;
+    attributes[1].offset = offsetof (Vertex2D, u);
+    attributes[1].format = VK_FORMAT_R32G32_SFLOAT;
+
     VkPipelineVertexInputStateCreateInfo vertexInputInfo {PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.vertexAttributeDescriptionCount = 2;
+    vertexInputInfo.pVertexBindingDescriptions = &binding;
+    vertexInputInfo.pVertexAttributeDescriptions = attributes;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo {PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
@@ -522,6 +547,14 @@ int main () {
 
 	vkCmdBeginRenderPass (currentFrame.commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
       }
+
+      VkDeviceSize offset = 0;
+
+      vkCmdBindPipeline (currentFrame.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[0]);
+      vkCmdBindVertexBuffers (currentFrame.commandBuffer, 0, 1, &quadVertexBuffer.handle, &offset);
+      vkCmdBindIndexBuffer (currentFrame.commandBuffer, quadIndexBuffer.handle, 0, VK_INDEX_TYPE_UINT16);
+
+      vkCmdDrawIndexed (currentFrame.commandBuffer, 6, 1, 0, 0, 0);
 
       vkCmdEndRenderPass (currentFrame.commandBuffer);
       VK_CHECK (vkEndCommandBuffer (currentFrame.commandBuffer));
