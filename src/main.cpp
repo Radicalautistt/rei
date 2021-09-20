@@ -37,6 +37,8 @@ int main () {
 
   VmaAllocator allocator;
 
+  rei::vkutils::Swapchain swapchain;
+
   { // Create instance
     VkApplicationInfo applicationInfo {APPLICATION_INFO};
     applicationInfo.apiVersion = VULKAN_VERSION;
@@ -140,6 +142,20 @@ int main () {
 
     VK_CHECK (vmaCreateAllocator (&createInfo, &allocator));
   }
+
+  { // Create swapchain
+    rei::vkutils::SwapchainCreateInfo createInfo;
+    createInfo.device = device;
+    createInfo.allocator = allocator;
+    createInfo.oldSwapchain = VK_NULL_HANDLE;
+    createInfo.windowSurface = windowSurface;
+    createInfo.window = &window;
+    createInfo.physicalDevice = physicalDevice;
+
+    rei::vkutils::createSwapchain (createInfo, swapchain);
+  }
+
+  rei::vkutils::destroySwapchain (device, allocator, swapchain);
 
   vmaDestroyAllocator (allocator);
   vkDestroyDevice (device, nullptr);

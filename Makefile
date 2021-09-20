@@ -4,7 +4,7 @@ includePaths = -I third-party/
 linkPaths = -L third-party/VulkanMemoryAllocator/build/src/
 links = -ldl -lm -lxcb -lVulkanMemoryAllocator
 
-flags = -std=c++17 -Wall -Wpadded -Wextra -Wconversion -Og -march=native -Wno-missing-field-initializers -g
+flags = -std=c++17 -Wall -Wextra -Wconversion -Og -march=native -Wno-missing-field-initializers -g
 sourceFiles = $(call rwildcard, src, *.cpp, *.hpp, *.h)
 objectFiles = $(patsubst src/%.cpp, obj/%.o, $(sourceFiles))
 
