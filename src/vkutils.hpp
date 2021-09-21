@@ -74,8 +74,6 @@ struct GraphicsPipelineCreateInfo {
 };
 
 struct BufferAllocationInfo {
-  VkDevice device;
-  VmaAllocator allocator;
   VkDeviceSize size;
 
   VkBufferUsageFlags bufferUsage;
@@ -83,11 +81,10 @@ struct BufferAllocationInfo {
   VkMemoryPropertyFlags requiredFlags;
 };
 
-struct BufferCopyInfo {
-  VkDevice device;
-  VkFence waitFence;
+struct TransferContext {
+  VkFence fence;
+  VkQueue queue;
   VkCommandPool commandPool;
-  VkQueue submitQueue;
 };
 
 struct Buffer {
@@ -99,12 +96,6 @@ struct Buffer {
 };
 
 struct TextureAllocationInfo {
-  VkDevice device;
-  VmaAllocator allocator;
-  VkFence waitFence;
-  VkQueue submitQueue;
-  VkCommandPool commandPool;
-
   uint32_t width, height;
   const char* pixels;
 };
@@ -132,19 +123,19 @@ void createGraphicsPipelines (
 );
 
 [[nodiscard]] VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool);
-void submitImmediateCommand (
-  VkDevice device,
-  VkCommandBuffer commandBuffer,
-  VkCommandPool commandPool,
-  VkFence waitFence,
-  VkQueue submitQueue
-);
+void submitImmediateCommand (VkDevice device, const TransferContext& transferContext, VkCommandBuffer commandBuffer);
 
-void allocateBuffer (const BufferAllocationInfo& allocationInfo, Buffer& output);
+void allocateBuffer (VkDevice device, VmaAllocator allocator, const BufferAllocationInfo& allocationInfo, Buffer& output);
 void allocateStagingBuffer (VkDevice device, VmaAllocator allocator, VkDeviceSize size, Buffer& output);
-void copyBuffer (const BufferCopyInfo& copyInfo, const Buffer& source, Buffer& destination);
+void copyBuffer (VkDevice device, const TransferContext& transferContext, const Buffer& source, Buffer& destination);
 
-void allocateTexture (const TextureAllocationInfo& allocationInfo, Image& output);
+void allocateTexture (
+  VkDevice device,
+  VmaAllocator allocator,
+  const TextureAllocationInfo& allocationInfo,
+  const TransferContext& transferContext,
+  Image& output
+);
 
 }
 

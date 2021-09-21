@@ -65,7 +65,7 @@ int main () {
   VkPhysicalDevice physicalDevice;
   VkDevice device;
   uint32_t queueFamilyIndex;
-  VkQueue graphicsQueue, presentQueue, transferQueue, computeQueue;
+  VkQueue graphicsQueue, presentQueue, computeQueue;
 
   VmaAllocator allocator;
 
@@ -76,8 +76,7 @@ int main () {
   VkFramebuffer* framebuffers;
   VkClearValue clearValues[2] {};
 
-  VkFence transferFence;
-  VkCommandPool transferCommandPool;
+  rei::vkutils::TransferContext transferContext;
 
   rei::vkutils::Buffer quadVertexBuffer;
   rei::vkutils::Buffer quadIndexBuffer;
@@ -163,7 +162,7 @@ int main () {
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &presentQueue);
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &computeQueue);
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &graphicsQueue);
-    vkGetDeviceQueue (device, queueFamilyIndex, 0, &transferQueue);
+    vkGetDeviceQueue (device, queueFamilyIndex, 0, &transferContext.queue);
   }
 
   { // Create allocator
@@ -295,7 +294,7 @@ int main () {
     VkFenceCreateInfo fenceInfo {FENCE_CREATE_INFO};
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &transferCommandPool));
+    VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &transferContext.commandPool));
 
     VkSemaphoreCreateInfo semaphoreInfo {SEMAPHORE_CREATE_INFO};
 
@@ -311,7 +310,7 @@ int main () {
     }
 
     fenceInfo.flags = VULKAN_NO_FLAGS;
-    VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &transferFence));
+    VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &transferContext.fence));
   }
 
   { // Create vertex buffer for quad
@@ -324,24 +323,16 @@ int main () {
 
     {
       rei::vkutils::BufferAllocationInfo allocationInfo;
-      allocationInfo.device = device;
-      allocationInfo.allocator = allocator;
       allocationInfo.size = sizeof (quadVertices);
       allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
       allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
       allocationInfo.bufferUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-      rei::vkutils::allocateBuffer (allocationInfo, quadVertexBuffer);
+      rei::vkutils::allocateBuffer (device, allocator, allocationInfo, quadVertexBuffer);
     }
 
-    rei::vkutils::BufferCopyInfo copyInfo;
-    copyInfo.device = device;
-    copyInfo.waitFence = transferFence;
-    copyInfo.submitQueue = transferQueue;
-    copyInfo.commandPool = transferCommandPool;
-
-    rei::vkutils::copyBuffer (copyInfo, stagingBuffer, quadVertexBuffer);
+    rei::vkutils::copyBuffer (device, transferContext, stagingBuffer, quadVertexBuffer);
     vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
   }
 
@@ -355,24 +346,16 @@ int main () {
 
     {
       rei::vkutils::BufferAllocationInfo allocationInfo;
-      allocationInfo.device = device;
-      allocationInfo.allocator = allocator;
       allocationInfo.size = sizeof (quadIndices);
       allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
       allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
       allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-      rei::vkutils::allocateBuffer (allocationInfo, quadIndexBuffer);
+      rei::vkutils::allocateBuffer (device, allocator, allocationInfo, quadIndexBuffer);
     }
 
-    rei::vkutils::BufferCopyInfo copyInfo;
-    copyInfo.device = device;
-    copyInfo.waitFence = transferFence;
-    copyInfo.submitQueue = transferQueue;
-    copyInfo.commandPool = transferCommandPool;
-
-    rei::vkutils::copyBuffer (copyInfo, stagingBuffer, quadIndexBuffer);
+    rei::vkutils::copyBuffer (device, transferContext, stagingBuffer, quadIndexBuffer);
     vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
   }
 
@@ -381,16 +364,11 @@ int main () {
     auto pixels = stbi_load ("assets/schnoz.png", &width, &height, &channels, STBI_rgb_alpha);
 
     rei::vkutils::TextureAllocationInfo allocationInfo;
-    allocationInfo.device = device;
-    allocationInfo.allocator = allocator;
-    allocationInfo.waitFence = transferFence;
-    allocationInfo.submitQueue = transferQueue;
-    allocationInfo.commandPool = transferCommandPool;
     allocationInfo.width = SCAST <uint32_t> (width);
     allocationInfo.height = SCAST <uint32_t> (height);
     allocationInfo.pixels = RCAST <const char*> (pixels);
 
-    rei::vkutils::allocateTexture (allocationInfo, testImage);
+    rei::vkutils::allocateTexture (device, allocator, allocationInfo, transferContext, testImage);
 
     stbi_image_free (pixels);
   }
@@ -685,8 +663,8 @@ int main () {
   vmaDestroyBuffer (allocator, quadIndexBuffer.handle, quadIndexBuffer.allocation);
   vmaDestroyBuffer (allocator, quadVertexBuffer.handle, quadVertexBuffer.allocation);
 
-  vkDestroyFence (device, transferFence, nullptr);
-  vkDestroyCommandPool (device, transferCommandPool, nullptr);
+  vkDestroyFence (device, transferContext.fence, nullptr);
+  vkDestroyCommandPool (device, transferContext.commandPool, nullptr);
 
   for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
     auto& current = frames[index];

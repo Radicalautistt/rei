@@ -370,28 +370,21 @@ void createGraphicsPipelines (
   return commandBuffer;
 }
 
-void submitImmediateCommand (
-  VkDevice device,
-  VkCommandBuffer commandBuffer,
-  VkCommandPool commandPool,
-  VkFence waitFence,
-  VkQueue submitQueue) {
-
+void submitImmediateCommand (VkDevice device, const TransferContext& transferContext, VkCommandBuffer commandBuffer) {
   VK_CHECK (vkEndCommandBuffer (commandBuffer));
 
   VkSubmitInfo submitInfo {SUBMIT_INFO};
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffer;
 
-  VK_CHECK (vkQueueSubmit (submitQueue, 1, &submitInfo, waitFence));
-  VK_CHECK (vkWaitForFences (device, 1, &waitFence, VK_TRUE, ~0ull));
+  VK_CHECK (vkQueueSubmit (transferContext.queue, 1, &submitInfo, transferContext.fence));
+  VK_CHECK (vkWaitForFences (device, 1, &transferContext.fence, VK_TRUE, ~0ull));
 
-  VK_CHECK (vkResetFences (device, 1, &waitFence));
-  VK_CHECK (vkResetCommandPool (device, commandPool, VULKAN_NO_FLAGS));
+  VK_CHECK (vkResetFences (device, 1, &transferContext.fence));
+  VK_CHECK (vkResetCommandPool (device, transferContext.commandPool, VULKAN_NO_FLAGS));
 }
 
-
-void allocateBuffer (const BufferAllocationInfo& allocationInfo, Buffer& output) {
+void allocateBuffer (VkDevice device, VmaAllocator allocator, const BufferAllocationInfo& allocationInfo, Buffer& output) {
   VkBufferCreateInfo createInfo {BUFFER_CREATE_INFO};
   createInfo.size = allocationInfo.size;
   createInfo.usage = allocationInfo.bufferUsage;
@@ -403,7 +396,7 @@ void allocateBuffer (const BufferAllocationInfo& allocationInfo, Buffer& output)
   vmaAllocationInfo.usage = SCAST <VmaMemoryUsage> (allocationInfo.memoryUsage);
 
   VK_CHECK (vmaCreateBuffer (
-    allocationInfo.allocator,
+    allocator,
     &createInfo,
     &vmaAllocationInfo,
     &output.handle,
@@ -415,18 +408,16 @@ void allocateBuffer (const BufferAllocationInfo& allocationInfo, Buffer& output)
 void allocateStagingBuffer (VkDevice device, VmaAllocator allocator, VkDeviceSize size, Buffer& output) {
   rei::vkutils::BufferAllocationInfo allocationInfo;
   allocationInfo.size = size;
-  allocationInfo.device = device;
-  allocationInfo.allocator = allocator;
   allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY;
   allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
   allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-  rei::vkutils::allocateBuffer (allocationInfo, output);
+  rei::vkutils::allocateBuffer (device, allocator, allocationInfo, output);
 }
 
-void copyBuffer (const BufferCopyInfo& copyInfo, const Buffer& source, Buffer& destination) {
-  auto commandBuffer = startImmediateCommand (copyInfo.device, copyInfo.commandPool);
+void copyBuffer (VkDevice device, const TransferContext& transferContext, const Buffer& source, Buffer& destination) {
+  auto commandBuffer = startImmediateCommand (device, transferContext.commandPool);
 
   VkBufferCopy copyRegion;
   copyRegion.srcOffset = 0;
@@ -434,28 +425,27 @@ void copyBuffer (const BufferCopyInfo& copyInfo, const Buffer& source, Buffer& d
   copyRegion.size = source.size;
 
   vkCmdCopyBuffer (commandBuffer, source.handle, destination.handle, 1, &copyRegion);
-
-  submitImmediateCommand (
-    copyInfo.device,
-    commandBuffer,
-    copyInfo.commandPool,
-    copyInfo.waitFence,
-    copyInfo.submitQueue
-  );
+  submitImmediateCommand (device, transferContext, commandBuffer);
 }
 
-void allocateTexture (const TextureAllocationInfo& allocationInfo, Image& output) {
+void allocateTexture (
+  VkDevice device,
+  VmaAllocator allocator,
+  const TextureAllocationInfo& allocationInfo,
+  const TransferContext& transferContext,
+  Image& output) {
+
   output.format = VK_FORMAT_R8G8B8A8_SRGB;
 
   VkExtent3D extent {allocationInfo.width, allocationInfo.height, 1};
   VkDeviceSize size = SCAST <VkDeviceSize> (extent.width * extent.height * 4);
 
   Buffer stagingBuffer;
-  allocateStagingBuffer (allocationInfo.device, allocationInfo.allocator, size, stagingBuffer);
+  allocateStagingBuffer (device, allocator, size, stagingBuffer);
 
-  VK_CHECK (vmaMapMemory (allocationInfo.allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
+  VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
   memcpy (stagingBuffer.mapped, allocationInfo.pixels, size);
-  vmaUnmapMemory (allocationInfo.allocator, stagingBuffer.allocation);
+  vmaUnmapMemory (allocator, stagingBuffer.allocation);
 
   {
     VkImageCreateInfo createInfo {IMAGE_CREATE_INFO};
@@ -475,7 +465,7 @@ void allocateTexture (const TextureAllocationInfo& allocationInfo, Image& output
     vmaAllocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
     VK_CHECK (vmaCreateImage (
-      allocationInfo.allocator,
+      allocator,
       &createInfo,
       &vmaAllocationInfo,
       &output.handle,
@@ -492,7 +482,7 @@ void allocateTexture (const TextureAllocationInfo& allocationInfo, Image& output
   subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
   {
-    auto commandBuffer = startImmediateCommand (allocationInfo.device, allocationInfo.commandPool);
+    auto commandBuffer = startImmediateCommand (device, transferContext.commandPool);
 
     VkImageMemoryBarrier transferBarrier {IMAGE_MEMORY_BARRIER};
     transferBarrier.image = output.handle;
@@ -547,16 +537,10 @@ void allocateTexture (const TextureAllocationInfo& allocationInfo, Image& output
       1, &readBarrier
     );
 
-    submitImmediateCommand (
-      allocationInfo.device,
-      commandBuffer,
-      allocationInfo.commandPool,
-      allocationInfo.waitFence,
-      allocationInfo.submitQueue
-    );
+    submitImmediateCommand (device, transferContext, commandBuffer);
   }
 
-  vmaDestroyBuffer (allocationInfo.allocator, stagingBuffer.handle, stagingBuffer.allocation);
+  vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
 
   VkImageViewCreateInfo createInfo {IMAGE_VIEW_CREATE_INFO};
   createInfo.image = output.handle;
@@ -564,7 +548,7 @@ void allocateTexture (const TextureAllocationInfo& allocationInfo, Image& output
   createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
   createInfo.subresourceRange = subresourceRange;
 
-  VK_CHECK (vkCreateImageView (allocationInfo.device, &createInfo, nullptr, &output.view));
+  VK_CHECK (vkCreateImageView (device, &createInfo, nullptr, &output.view));
 }
 
 }
