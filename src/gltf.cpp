@@ -6,6 +6,8 @@
 #include "common.hpp"
 #include "utils.hpp"
 
+#include <simdjson/simdjson.h>
+
 namespace rei::assets::gltf {
 
 uint8_t countComponents (AccessorType accessorType) noexcept {
@@ -32,19 +34,21 @@ AccessorType parseAccessorType (const char* rawType) noexcept {
   return AccessorType::Unknown;
 }
 
-TopologyType parsePrimitiveMode (const char* rawMode) noexcept {
-  if (!strcmp (rawMode, "LINES")) return TopologyType::Lines;
-  if (!strcmp (rawMode, "POINTS")) return TopologyType::Points;
-  if (!strcmp (rawMode, "LINE_LOOP")) return TopologyType::LineLoop;
-  if (!strcmp (rawMode, "TRIANGLES")) return TopologyType::Triangles;
-  if (!strcmp (rawMode, "LINE_STRIP")) return TopologyType::LineStrip;
-  if (!strcmp (rawMode, "TRIANGLE_FAN")) return TopologyType::TriangleFan;
-  if (!strcmp (rawMode, "TRIANGLE_STRIP")) return TopologyType::TriangleStrip;
-  return TopologyType::Unknown;
+TopologyType parsePrimitiveMode (uint64_t mode) noexcept {
+  switch (mode) {
+    case 1: return TopologyType::Lines;
+    case 0: return TopologyType::Points;
+    case 2: return TopologyType::LineLoop;
+    case 4: return TopologyType::Triangles;
+    case 3: return TopologyType::LineStrip;
+    case 6: return TopologyType::TriangleFan;
+    case 5: return TopologyType::TriangleStrip;
+    default: return TopologyType::Unknown;
+  }
 }
 
-AccessorComponentType parseAccessorComponentType (uint64_t rawType) noexcept {
-  switch (rawType) {
+AccessorComponentType parseAccessorComponentType (uint64_t type) noexcept {
+  switch (type) {
     case 5120: return AccessorComponentType::Int8;
     case 5121: return AccessorComponentType::Uint8;
     case 5122: return AccessorComponentType::Int16;
@@ -53,6 +57,13 @@ AccessorComponentType parseAccessorComponentType (uint64_t rawType) noexcept {
     case 5125: return AccessorComponentType::Uint32;
     default: return AccessorComponentType::Unknown;
   }
+}
+
+[[nodiscard]] static inline size_t jsonArraySize (simdjson::ondemand::array&& array) noexcept {
+  size_t result = 0;
+  for (auto current = array.begin (); current != array.end (); ++current)
+    ++result;
+  return result;
 }
 
 void load (const char* relativePath, Data& output) {
@@ -71,6 +82,73 @@ void load (const char* relativePath, Data& output) {
     memcpy (output.buffer, SCAST <uint8_t*> (binaryFile.contents), binaryFile.size);
 
     free (binaryFile.contents);
+  }
+
+  // TODO Either migrate to json parser written in C (without the C++ bullshit),
+  // or write my own. 25 FREAKING seconds to compile this translation unit is not a joke.
+  // Sure, this thing's fast, but I'm not willing to wait almost two quarters of a minute each time I make a small change.
+  // Also, it forces me to use STL and exceptions (kinda), so, yeah...
+  simdjson::ondemand::parser parser;
+  simdjson::padded_string rawGLTF = simdjson::padded_string::load (relativePath);
+  simdjson::ondemand::document parsedGLTF = parser.iterate (rawGLTF);
+
+  { // Load buffer views
+    output.bufferViewsCount = jsonArraySize (parsedGLTF["bufferViews"]);
+    output.bufferViews = MALLOC (BufferView, output.bufferViewsCount);
+
+    size_t index = 0;
+    for (auto bufferView : parsedGLTF["bufferViews"].get_array ()) {
+      auto& newBufferView = output.bufferViews[index++];
+      newBufferView.buffer = SCAST <uint32_t> (bufferView["buffer"].get_uint64 ());
+      newBufferView.byteLength = SCAST <uint32_t> (bufferView["byteLength"].get_uint64 ());
+      newBufferView.byteOffset = SCAST <uint32_t> (bufferView["byteOffset"].get_uint64 ());
+    }
+  }
+
+  { // Load accessors
+    output.accessorsCount = jsonArraySize (parsedGLTF["accessors"]);
+    output.accessors = MALLOC (Accessor, output.accessorsCount);
+
+    size_t index = 0;
+    for (auto accessor : parsedGLTF["accessors"].get_array ()) {
+      char accessorType[7] {};
+      std::string_view accessorTypeView = accessor["type"];
+      strncpy (accessorType, accessorTypeView.data (), accessorTypeView.size ());
+
+      auto& newAccessor = output.accessors[index++];
+      newAccessor.type = parseAccessorType (accessorType);
+      newAccessor.count = SCAST <uint32_t> (accessor["count"].get_uint64 ());
+      newAccessor.bufferView = SCAST <uint32_t> (accessor["bufferView"].get_uint64 ());
+      newAccessor.byteOffset = SCAST <uint32_t> (accessor["byteOffset"].get_uint64 ());
+      newAccessor.componentType = parseAccessorComponentType (accessor["componentType"].get_uint64 ());
+    }
+  }
+
+  { // Load primitives
+    auto defaultMesh = *parsedGLTF["meshes"].get_array().begin();
+    output.mesh.primitivesCount = jsonArraySize (defaultMesh["primitives"]);
+    output.mesh.primitives = MALLOC (Primitive, output.mesh.primitivesCount);
+
+    #define GET_ATTRIBUTE(name, fieldName) do {                                                     \
+      auto result = primitive["attributes"][name];                                                  \
+      if (result.error () == simdjson::SUCCESS)                                                     \
+        newPrimitive.attributes.fieldName = (uint32_t) primitive["attributes"][name].get_uint64 (); \
+    } while (false)
+
+    size_t index = 0;
+    for (auto primitive : defaultMesh["primitives"].get_array ()) {
+      auto& newPrimitive = output.mesh.primitives[index++];
+      GET_ATTRIBUTE ("TEXCOORD_0", uv);
+      GET_ATTRIBUTE ("NORMAL", normal);
+      GET_ATTRIBUTE ("TANGENT", tangent);
+      GET_ATTRIBUTE ("POSITION", position);
+
+      newPrimitive.mode = parsePrimitiveMode (primitive["mode"].get_uint64 ());
+      newPrimitive.indices = SCAST <uint32_t> (primitive["indices"].get_uint64 ());
+      newPrimitive.material = SCAST <uint32_t> (primitive["material"].get_uint64 ());
+    }
+
+    #undef GET_ATTRIBUTE
   }
 }
 

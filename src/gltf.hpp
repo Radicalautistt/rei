@@ -89,8 +89,8 @@ struct Data {
 
 [[nodiscard]] uint8_t countComponents (AccessorType accessorType) noexcept;
 [[nodiscard]] AccessorType parseAccessorType (const char* rawType) noexcept;
-[[nodiscard]] TopologyType parsePrimitiveMode (const char* rawMode) noexcept;
-[[nodiscard]] AccessorComponentType parseAccessorComponentType (uint64_t rawType) noexcept;
+[[nodiscard]] TopologyType parsePrimitiveMode (uint64_t mode) noexcept;
+[[nodiscard]] AccessorComponentType parseAccessorComponentType (uint64_t type) noexcept;
 
 void load (const char* relativePath, Data& output);
 void destroy (Data& data);
