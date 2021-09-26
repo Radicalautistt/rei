@@ -10,6 +10,12 @@
 
 namespace rei::assets::gltf {
 
+MimeType parseMimeType (const char* rawType) noexcept {
+  if (!strcmp (rawType, "image/png")) return MimeType::Png;
+  if (!strcmp (rawType, "image/jpeg")) return MimeType::Jpeg;
+  return MimeType::Unknown;
+}
+
 AlphaMode parseAlphaMode (const char* rawMode) noexcept {
   if (!strcmp (rawMode, "MASK")) return AlphaMode::Mask;
   if (!strcmp (rawMode, "BLEND")) return AlphaMode::Blend;
@@ -158,6 +164,36 @@ void load (const char* relativePath, Data& output) {
     #undef GET_ATTRIBUTE
   }
 
+  {  // Load images
+     output.imagesCount = jsonArraySize (parsedGLTF["images"]);
+     output.images = MALLOC (Image, output.imagesCount);
+
+     size_t index = 0;
+     for (auto image : parsedGLTF["images"].get_array ()) {
+       std::string_view uriView = image["uri"];
+       std::string_view mimeTypeView = image["mimeType"];
+
+       auto& newImage = output.images[index++];
+       memset (newImage.uri, 0, sizeof (newImage.uri));
+       strncpy (newImage.uri, uriView.data (), uriView.size ());
+
+       char mimeType[11] {};
+       strncpy (mimeType, mimeTypeView.data (), mimeTypeView.size ());
+       newImage.mimeType = parseMimeType (mimeType);
+     }
+  }
+
+  { // Load textures
+    output.texturesCount = jsonArraySize (parsedGLTF["textures"]);
+    output.textures = MALLOC (Texture, output.texturesCount);
+
+    size_t index = 0;
+    for (auto texture : parsedGLTF["textures"].get_array ()) {
+      auto& newTexture = output.textures[index++];
+      newTexture.source = SCAST <uint32_t> (texture["source"].get_uint64 ());
+    }
+  }
+
   { // Load materials
     output.materialsCount = jsonArraySize (parsedGLTF["materials"]);
     output.materials = MALLOC (Material, output.materialsCount);
@@ -188,6 +224,8 @@ void load (const char* relativePath, Data& output) {
 
 void destroy (Data& data) {
   free (data.materials);
+  free (data.textures);
+  free (data.images);
   free (data.mesh.primitives);
   free (data.accessors);
   free (data.bufferViews);

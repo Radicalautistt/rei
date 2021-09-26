@@ -49,6 +49,13 @@ enum class AlphaMode : uint8_t {
   Unknown
 };
 
+enum class MimeType : uint8_t {
+  Png,
+  Jpeg,
+
+  Unknown
+};
+
 struct Accessor {
   AccessorType type;
   AccessorComponentType componentType;
@@ -62,6 +69,15 @@ struct BufferView {
   uint32_t buffer;
   uint32_t byteLength;
   uint32_t byteOffset;
+};
+
+struct Image {
+  char uri[256];
+  MimeType mimeType;
+};
+
+struct Texture {
+  uint32_t source;
 };
 
 struct TextureInfo {
@@ -107,10 +123,17 @@ struct Data {
 
   Mesh mesh;
 
+  Image* images;
+  size_t imagesCount;
+
+  Texture* textures;
+  size_t texturesCount;
+
   Material* materials;
   size_t materialsCount;
 };
 
+[[nodiscard]] MimeType parseMimeType (const char* rawType) noexcept;
 [[nodiscard]] AlphaMode parseAlphaMode (const char* rawMode) noexcept;
 [[nodiscard]] TopologyType parsePrimitiveMode (uint64_t mode) noexcept;
 [[nodiscard]] uint8_t countComponents (AccessorType accessorType) noexcept;
