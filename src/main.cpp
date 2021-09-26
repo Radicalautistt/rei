@@ -7,7 +7,7 @@
 #include "window.hpp"
 #include "vkutils.hpp"
 #include "vkcommon.hpp"
-#include "gltf.hpp"
+#include "gltf_model.hpp"
 
 #include <xcb/xcb.h>
 #include <stb/stb_image.h>
@@ -78,6 +78,8 @@ int main () {
   VkClearValue clearValues[2] {};
 
   rei::vkutils::TransferContext transferContext;
+
+  rei::gltf::Model sponza;
 
   rei::vkutils::Buffer quadVertexBuffer;
   rei::vkutils::Buffer quadIndexBuffer;
@@ -316,8 +318,7 @@ int main () {
     VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &transferContext.fence));
   }
 
-  rei::assets::gltf::Data testGltf;
-  rei::assets::gltf::load ("assets/models/sponza/Sponza.gltf", testGltf);
+  rei::gltf::loadModel (device, allocator, transferContext, "assets/models/sponza-scene/Sponza.gltf", sponza);
 
   { // Create vertex buffer for quad
     rei::vkutils::Buffer stagingBuffer;
@@ -440,6 +441,8 @@ int main () {
     vkUpdateDescriptorSets (device, 1, &writeInfo, 0, nullptr);
   }
 
+  sponza.initPipelines (device, renderPass, swapchain);
+
   { // Create quad pipeline layout
     VkPushConstantRange pushConstantRange;
     pushConstantRange.offset = 0;
@@ -525,7 +528,7 @@ int main () {
     depthStencilInfo.depthWriteEnable = VK_TRUE;
     depthStencilInfo.stencilTestEnable = VK_FALSE;
     depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
-    depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depthStencilInfo.depthCompareOp = VK_COMPARE_OP_LESS;
 
     VkPipelineColorBlendAttachmentState blendAttachmentInfo {};
     blendAttachmentInfo.blendEnable = VK_FALSE,
@@ -611,6 +614,7 @@ int main () {
 
       VkDeviceSize offset = 0;
 
+#if 0
       vkCmdBindPipeline (currentFrame.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[0]);
       vkCmdBindVertexBuffers (currentFrame.commandBuffer, 0, 1, &quadVertexBuffer.handle, &offset);
       vkCmdBindIndexBuffer (currentFrame.commandBuffer, quadIndexBuffer.handle, 0, VK_INDEX_TYPE_UINT16);
@@ -619,6 +623,8 @@ int main () {
       vkCmdPushConstants (currentFrame.commandBuffer, quadPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (glm::mat4), &mvp);
 
       vkCmdDrawIndexed (currentFrame.commandBuffer, 6, 1, 0, 0, 0);
+#endif
+      sponza.draw (currentFrame.commandBuffer, mvp);
 
       vkCmdEndRenderPass (currentFrame.commandBuffer);
       VK_CHECK (vkEndCommandBuffer (currentFrame.commandBuffer));
@@ -668,6 +674,8 @@ int main () {
 
   vmaDestroyBuffer (allocator, quadIndexBuffer.handle, quadIndexBuffer.allocation);
   vmaDestroyBuffer (allocator, quadVertexBuffer.handle, quadVertexBuffer.allocation);
+
+  rei::gltf::destroyModel (device, allocator, sponza);
 
   vkDestroyFence (device, transferContext.fence, nullptr);
   vkDestroyCommandPool (device, transferContext.commandPool, nullptr);
