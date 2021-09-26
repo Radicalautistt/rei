@@ -10,6 +10,13 @@
 
 namespace rei::assets::gltf {
 
+AlphaMode parseAlphaMode (const char* rawMode) noexcept {
+  if (!strcmp (rawMode, "MASK")) return AlphaMode::Mask;
+  if (!strcmp (rawMode, "BLEND")) return AlphaMode::Blend;
+  if (!strcmp (rawMode, "OPAQUE")) return AlphaMode::Opaque;
+  return AlphaMode::Unknown;
+}
+
 uint8_t countComponents (AccessorType accessorType) noexcept {
   switch (accessorType) {
     case AccessorType::Vec2: return 2;
@@ -150,9 +157,37 @@ void load (const char* relativePath, Data& output) {
 
     #undef GET_ATTRIBUTE
   }
+
+  { // Load materials
+    output.materialsCount = jsonArraySize (parsedGLTF["materials"]);
+    output.materials = MALLOC (Material, output.materialsCount);
+
+    size_t index = 0;
+    for (auto material : parsedGLTF["materials"].get_array ()) {
+      auto& newMaterial = output.materials[index++];
+
+      {
+      auto result = material["alphaMode"];
+        if (result.error () != simdjson::SUCCESS) {
+          newMaterial.alphaMode = AlphaMode::Opaque;
+        } else {
+          char alphaMode[7] {};
+
+          std::string_view alphaModeView = result.value_unsafe ();
+          strncpy (alphaMode, alphaModeView.data (), alphaModeView.size ());
+
+          newMaterial.alphaMode = parseAlphaMode (alphaMode);
+        }
+      }
+
+      newMaterial.pbrMetallicRoughness.baseColorTexture.index =
+	SCAST <uint32_t> (material["pbrMetallicRoughness"]["baseColorTexture"]["index"].get_uint64());
+    }
+  }
 }
 
 void destroy (Data& data) {
+  free (data.materials);
   free (data.mesh.primitives);
   free (data.accessors);
   free (data.bufferViews);

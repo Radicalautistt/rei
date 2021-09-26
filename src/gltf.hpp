@@ -41,6 +41,14 @@ enum class TopologyType : uint8_t {
   Unknown
 };
 
+enum class AlphaMode : uint8_t {
+  Mask,
+  Blend,
+  Opaque,
+
+  Unknown
+};
+
 struct Accessor {
   AccessorType type;
   AccessorComponentType componentType;
@@ -54,6 +62,19 @@ struct BufferView {
   uint32_t buffer;
   uint32_t byteLength;
   uint32_t byteOffset;
+};
+
+struct TextureInfo {
+  uint32_t index;
+};
+
+struct PbrMetallicRoughness {
+  TextureInfo baseColorTexture;
+};
+
+struct Material {
+  AlphaMode alphaMode;
+  PbrMetallicRoughness pbrMetallicRoughness;
 };
 
 struct Primitive {
@@ -85,11 +106,15 @@ struct Data {
   size_t accessorsCount;
 
   Mesh mesh;
+
+  Material* materials;
+  size_t materialsCount;
 };
 
+[[nodiscard]] AlphaMode parseAlphaMode (const char* rawMode) noexcept;
+[[nodiscard]] TopologyType parsePrimitiveMode (uint64_t mode) noexcept;
 [[nodiscard]] uint8_t countComponents (AccessorType accessorType) noexcept;
 [[nodiscard]] AccessorType parseAccessorType (const char* rawType) noexcept;
-[[nodiscard]] TopologyType parsePrimitiveMode (uint64_t mode) noexcept;
 [[nodiscard]] AccessorComponentType parseAccessorComponentType (uint64_t type) noexcept;
 
 void load (const char* relativePath, Data& output);
