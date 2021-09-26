@@ -92,7 +92,7 @@ int main () {
 
   glm::mat4 modelMatrix = glm::translate (glm::mat4 {1.f}, glm::vec3 {0.f, 0.f, 1.f});
   glm::mat4 view = glm::lookAt (glm::vec3 {0.f, 0.f, 3.f}, {0.f, 0.f, 0.f}, {0.f, 1.f, 0.f});
-  glm::mat4 projection = glm::perspective (glm::radians (45.f), 1680.f / 1050.f, 0.1f, 2000.f);
+  glm::mat4 projection = glm::perspective (glm::radians (45.f), 1680.f / 1050.f, 0.1f, 3000.f);
   glm::mat4 mvp = projection * view * modelMatrix;
 
   VkPipelineLayout quadPipelineLayout;

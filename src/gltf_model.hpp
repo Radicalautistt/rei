@@ -24,8 +24,12 @@ struct Primitive {
 struct Model {
   VkPipeline pipeline;
   VkPipelineLayout pipelineLayout;
+
   Primitive* primitives;
   uint32_t primitivesCount;
+
+  vkutils::Image* textures;
+  uint32_t texturesCount;
 
   uint32_t vertexCount, indexCount;
   vkutils::Buffer vertexBuffer;

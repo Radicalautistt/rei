@@ -7,6 +7,7 @@
 #include "common.hpp"
 #include "gltf_model.hpp"
 
+#include <stb/stb_image.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
 namespace rei::gltf {
@@ -31,10 +32,13 @@ void loadModel (
 
   output.vertexCount = vertexCount;
   output.indexCount = indexCount;
+  output.primitivesCount = gltf.mesh.primitivesCount;
+
   uint32_t vertexOffset = 0, indexOffset = 0;
 
   auto vertices = MALLOC (Vertex, vertexCount);
   auto indices = MALLOC (uint32_t, indexCount);
+  output.primitives = MALLOC (Primitive, output.primitivesCount);
 
   #define GET_ACCESSOR(attribute, result) do {                                                 \
     const auto& accessor = gltf.accessors[currentPrimitive.attributes.attribute];              \
@@ -45,6 +49,7 @@ void loadModel (
   for (size_t primitive = 0; primitive < gltf.mesh.primitivesCount; ++primitive) {
     const auto& currentPrimitive = gltf.mesh.primitives[primitive];
 
+    uint32_t firstIndex = indexOffset;
     uint32_t vertexStart = vertexOffset;
 
     const float* uvAccessor = nullptr;
@@ -74,6 +79,11 @@ void loadModel (
 
     for (uint32_t index = 0; index < accessor.count; ++index)
       indices[indexOffset++] = indexAccessor[index] + vertexStart;
+
+    auto& newPrimitive = output.primitives[primitive];
+    newPrimitive.firstIndex = firstIndex;
+    newPrimitive.indexCount = accessor.count;
+    newPrimitive.materialIndex = currentPrimitive.material;
   }
 
   #undef GET_ACCESSOR
@@ -130,6 +140,38 @@ void loadModel (
 
   free (indices);
 
+  output.texturesCount = gltf.imagesCount;
+  output.textures = MALLOC (vkutils::Image, gltf.imagesCount);
+
+  for (size_t index = 0; index < gltf.imagesCount; ++index) {
+    const auto& current = gltf.images[index];
+
+    char texturePath[256] {};
+    strcpy (texturePath, relativePath);
+
+    char* fileName = strrchr (texturePath, '/');
+    strcpy (fileName + 1, current.uri);
+
+    int width, height, channels;
+    auto pixels = stbi_load (texturePath, &width, &height, &channels, STBI_rgb_alpha);
+    assert (pixels);
+
+    vkutils::TextureAllocationInfo allocationInfo;
+    allocationInfo.width = SCAST <uint32_t> (width);
+    allocationInfo.height = SCAST <uint32_t> (height);
+    allocationInfo.pixels = RCAST <const char*> (pixels);
+
+    vkutils::allocateTexture (
+      device,
+      allocator,
+      allocationInfo,
+      transferContext,
+      output.textures[index]
+    );
+
+    stbi_image_free (pixels);
+  }
+
   assets::gltf::destroy (gltf);
 }
 
@@ -139,6 +181,13 @@ void destroyModel (VkDevice device, VmaAllocator allocator, Model& model) {
   vmaDestroyBuffer (allocator, model.indexBuffer.handle, model.indexBuffer.allocation);
   vmaDestroyBuffer (allocator, model.vertexBuffer.handle, model.vertexBuffer.allocation);
 
+  for (uint32_t index = 0; index < model.texturesCount; ++index) {
+    auto& current = model.textures[index];
+    vkDestroyImageView (device, current.view, nullptr);
+    vmaDestroyImage (allocator, current.handle, current.allocation);
+  }
+
+  free (model.textures);
   free (model.primitives);
 }
 
@@ -274,14 +323,10 @@ void Model::draw (VkCommandBuffer commandBuffer, const glm::mat4& mvp) {
 
   vkCmdPushConstants (commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (glm::mat4), &mvp);
 
-  vkCmdDrawIndexed (commandBuffer, indexCount, 1, 0, 0, 0);
-
-#if 0
   for (uint32_t index = 0; index < primitivesCount; ++index) {
     const auto& current = primitives[index];
     vkCmdDrawIndexed (commandBuffer, current.indexCount, 1, current.firstIndex, 0, 0);
   }
-#endif
 }
 
 }
