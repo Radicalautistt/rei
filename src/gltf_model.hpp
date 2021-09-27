@@ -15,6 +15,13 @@ struct Vertex {
   float u, v;
 };
 
+struct Material {
+  uint32_t albedoIndex;
+  VkSampler albedoSampler;
+  VkDescriptorSet descriptorSet;
+  VkDescriptorSetLayout descriptorSetLayout;
+};
+
 struct Primitive {
   uint32_t firstIndex;
   uint32_t indexCount;
@@ -24,6 +31,11 @@ struct Primitive {
 struct Model {
   VkPipeline pipeline;
   VkPipelineLayout pipelineLayout;
+
+  VkDescriptorPool descriptorPool;
+
+  Material* materials;
+  uint32_t materialsCount;
 
   Primitive* primitives;
   uint32_t primitivesCount;
@@ -35,6 +47,9 @@ struct Model {
   vkutils::Buffer vertexBuffer;
   vkutils::Buffer indexBuffer;
 
+  void initDescriptorPool (VkDevice device);
+
+  void initMaterialDescriptors (VkDevice device);
   void initPipelines (VkDevice device, VkRenderPass renderPass, const vkutils::Swapchain& swapchain);
   void draw (VkCommandBuffer commandBuffer, const glm::mat4& mvp);
 };

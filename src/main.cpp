@@ -93,6 +93,7 @@ int main () {
   glm::mat4 modelMatrix = glm::translate (glm::mat4 {1.f}, glm::vec3 {0.f, 0.f, 1.f});
   glm::mat4 view = glm::lookAt (glm::vec3 {0.f, 0.f, 3.f}, {0.f, 0.f, 0.f}, {0.f, 1.f, 0.f});
   glm::mat4 projection = glm::perspective (glm::radians (45.f), 1680.f / 1050.f, 0.1f, 3000.f);
+  projection[1][1] *= -1;
   glm::mat4 mvp = projection * view * modelMatrix;
 
   VkPipelineLayout quadPipelineLayout;
@@ -441,6 +442,8 @@ int main () {
     vkUpdateDescriptorSets (device, 1, &writeInfo, 0, nullptr);
   }
 
+  sponza.initDescriptorPool (device);
+  sponza.initMaterialDescriptors (device);
   sponza.initPipelines (device, renderPass, swapchain);
 
   { // Create quad pipeline layout
@@ -497,7 +500,7 @@ int main () {
     viewport.x = 0.f;
     viewport.y = 0.f;
     viewport.minDepth = 0.f;
-    viewport.minDepth = 1.f;
+    viewport.maxDepth = 1.f;
     viewport.width = SCAST <float> (swapchain.extent.width);
     viewport.height = SCAST <float> (swapchain.extent.height);
 

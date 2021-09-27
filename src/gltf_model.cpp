@@ -172,6 +172,13 @@ void loadModel (
     stbi_image_free (pixels);
   }
 
+  output.materialsCount = gltf.materialsCount;
+  output.materials = MALLOC (Material, gltf.materialsCount);
+
+  for (size_t index = 0; index < gltf.materialsCount; ++index)
+    output.materials[index].albedoIndex =
+      gltf.materials[index].pbrMetallicRoughness.baseColorTexture.index;
+
   assets::gltf::destroy (gltf);
 }
 
@@ -180,6 +187,16 @@ void destroyModel (VkDevice device, VmaAllocator allocator, Model& model) {
   vkDestroyPipelineLayout (device, model.pipelineLayout, nullptr);
   vmaDestroyBuffer (allocator, model.indexBuffer.handle, model.indexBuffer.allocation);
   vmaDestroyBuffer (allocator, model.vertexBuffer.handle, model.vertexBuffer.allocation);
+
+  for (uint32_t index = 0; index < model.materialsCount; ++index) {
+    auto& current = model.materials[index];
+    vkDestroySampler (device, current.albedoSampler, nullptr);
+    vkDestroyDescriptorSetLayout (device, current.descriptorSetLayout, nullptr);
+  }
+
+  free (model.materials);
+
+  vkDestroyDescriptorPool (device, model.descriptorPool, nullptr);
 
   for (uint32_t index = 0; index < model.texturesCount; ++index) {
     auto& current = model.textures[index];
@@ -191,6 +208,73 @@ void destroyModel (VkDevice device, VmaAllocator allocator, Model& model) {
   free (model.primitives);
 }
 
+void Model::initMaterialDescriptors (VkDevice device) {
+  for (uint32_t index = 0; index < materialsCount; ++index) {
+    auto& current = materials[index];
+
+    {
+      VkDescriptorSetLayoutBinding albedo;
+      albedo.binding = 0;
+      albedo.descriptorCount = 1;
+      albedo.pImmutableSamplers = nullptr;
+      albedo.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+      albedo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+      VkDescriptorSetLayoutCreateInfo createInfo {DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+      createInfo.bindingCount = 1;
+      createInfo.pBindings = &albedo;
+
+      VK_CHECK (vkCreateDescriptorSetLayout (device, &createInfo, nullptr, &current.descriptorSetLayout));
+    }
+
+    {
+      VkDescriptorSetAllocateInfo allocationInfo {DESCRIPTOR_SET_ALLOCATE_INFO};
+      allocationInfo.descriptorSetCount = 1;
+      allocationInfo.descriptorPool = descriptorPool;
+      allocationInfo.pSetLayouts = &current.descriptorSetLayout;
+
+      VK_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &current.descriptorSet));
+    }
+
+    {
+      // TODO get filtering, etc from gltf samplers
+      VkSamplerCreateInfo createInfo {SAMPLER_CREATE_INFO};
+      createInfo.minFilter = VK_FILTER_LINEAR;
+      createInfo.magFilter = VK_FILTER_LINEAR;
+      createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+      VK_CHECK (vkCreateSampler (device, &createInfo, nullptr, &current.albedoSampler));
+    }
+
+    VkDescriptorImageInfo albedoInfo;
+    albedoInfo.sampler = current.albedoSampler;
+    albedoInfo.imageView = textures[current.albedoIndex].view;
+    albedoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet write {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstBinding = 0;
+    write.descriptorCount = 1;
+    write.pImageInfo = &albedoInfo;
+    write.dstSet = current.descriptorSet;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+    vkUpdateDescriptorSets (device, 1, &write, 0, nullptr);
+  }
+}
+
+void Model::initDescriptorPool (VkDevice device) {
+  VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, texturesCount};
+
+  VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
+  createInfo.poolSizeCount = 1;
+  createInfo.pPoolSizes = &poolSize;
+  createInfo.maxSets = materialsCount;
+
+  VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &descriptorPool));
+}
+
 void Model::initPipelines (VkDevice device, VkRenderPass renderPass, const vkutils::Swapchain& swapchain) {
   {
     VkPushConstantRange pushConstantRange;
@@ -199,8 +283,11 @@ void Model::initPipelines (VkDevice device, VkRenderPass renderPass, const vkuti
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkPipelineLayoutCreateInfo createInfo {PIPELINE_LAYOUT_CREATE_INFO};
+    createInfo.setLayoutCount = 1;
     createInfo.pushConstantRangeCount = 1;
     createInfo.pPushConstantRanges = &pushConstantRange;
+    // TODO create different pipelines for every sampler combination (e.g albedo, albedo + normal, etc)
+    createInfo.pSetLayouts = &materials[0].descriptorSetLayout;
 
     VK_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &pipelineLayout));
   }
@@ -250,7 +337,7 @@ void Model::initPipelines (VkDevice device, VkRenderPass renderPass, const vkuti
   viewport.x = 0.f;
   viewport.y = 0.f;
   viewport.minDepth = 0.f;
-  viewport.minDepth = 1.f;
+  viewport.maxDepth = 1.f;
   viewport.width = SCAST <float> (swapchain.extent.width);
   viewport.height = SCAST <float> (swapchain.extent.height);
 
@@ -325,6 +412,16 @@ void Model::draw (VkCommandBuffer commandBuffer, const glm::mat4& mvp) {
 
   for (uint32_t index = 0; index < primitivesCount; ++index) {
     const auto& current = primitives[index];
+
+    vkCmdBindDescriptorSets (
+      commandBuffer,
+      VK_PIPELINE_BIND_POINT_GRAPHICS,
+      pipelineLayout,
+      0,
+      1, &materials[current.materialIndex].descriptorSet,
+      0, nullptr
+    );
+
     vkCmdDrawIndexed (commandBuffer, current.indexCount, 1, current.firstIndex, 0, 0);
   }
 }
