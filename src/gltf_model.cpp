@@ -30,9 +30,7 @@ void loadModel (
     vertexCount += gltf.accessors[current.attributes.position].count;
   }
 
-  output.vertexCount = vertexCount;
-  output.indexCount = indexCount;
-  output.primitivesCount = gltf.mesh.primitivesCount;
+  output.primitivesCount = SCAST <uint32_t> (gltf.mesh.primitivesCount);
 
   uint32_t vertexOffset = 0, indexOffset = 0;
 
@@ -140,7 +138,7 @@ void loadModel (
 
   free (indices);
 
-  output.texturesCount = gltf.imagesCount;
+  output.texturesCount = SCAST <uint32_t> (gltf.imagesCount);
   output.textures = MALLOC (vkutils::Image, gltf.imagesCount);
 
   for (size_t index = 0; index < gltf.imagesCount; ++index) {
@@ -172,7 +170,7 @@ void loadModel (
     stbi_image_free (pixels);
   }
 
-  output.materialsCount = gltf.materialsCount;
+  output.materialsCount = SCAST <uint32_t> (gltf.materialsCount);
   output.materials = MALLOC (Material, gltf.materialsCount);
 
   for (size_t index = 0; index < gltf.materialsCount; ++index)

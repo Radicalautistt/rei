@@ -116,13 +116,13 @@ void createSwapchain (const SwapchainCreateInfo& createInfo, Swapchain& output) 
     if (surfaceCapabilities.currentExtent.width != UINT32_MAX) {
       output.extent = surfaceCapabilities.currentExtent;
     } else {
-      output.extent.width = utils::clamp <uint32_t> (
+      output.extent.width = CLAMP (
         SCAST <uint32_t> (createInfo.window->width),
         surfaceCapabilities.minImageExtent.width,
         surfaceCapabilities.maxImageExtent.width
       );
 
-      output.extent.height = utils::clamp <uint32_t> (
+      output.extent.height = CLAMP (
         SCAST <uint32_t> (createInfo.window->height),
         surfaceCapabilities.minImageExtent.height,
         surfaceCapabilities.maxImageExtent.height

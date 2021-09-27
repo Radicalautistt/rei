@@ -43,7 +43,6 @@ struct Model {
   vkutils::Image* textures;
   uint32_t texturesCount;
 
-  uint32_t vertexCount, indexCount;
   vkutils::Buffer vertexBuffer;
   vkutils::Buffer indexBuffer;
 
