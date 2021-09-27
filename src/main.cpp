@@ -1,7 +1,9 @@
 #include <stdio.h>
 
 #include "vk.hpp"
+#include "utils.hpp"
 #include "common.hpp"
+#include "camera.hpp"
 #include "vkinit.hpp"
 #include "window.hpp"
 #include "vkutils.hpp"
@@ -40,6 +42,7 @@ constexpr Vertex2D quadVertices[4] {
 constexpr uint16_t quadIndices[6] {0, 1, 3, 1, 2, 3};
 
 int main () {
+  rei::utils::Timer::init ();
   VulkanContext::init ();
 
   rei::extra::xcb::Window window;
@@ -54,6 +57,8 @@ int main () {
 
     rei::extra::xcb::createWindow (createInfo, window);
   }
+
+  rei::Camera camera {glm::vec3 {0.f, 1.f, 0.f}, glm::vec3 {0.f, 5.f, -10.f}, -90.f, 0.f};
 
   VkInstance instance;
   #ifndef NDEBUG
@@ -80,10 +85,6 @@ int main () {
   rei::gltf::Model sponza;
 
   glm::mat4 modelMatrix = glm::translate (glm::mat4 {1.f}, glm::vec3 {0.f, 0.f, 1.f});
-  glm::mat4 view = glm::lookAt (glm::vec3 {0.f, 0.f, 3.f}, {0.f, 0.f, 0.f}, {0.f, 1.f, 0.f});
-  glm::mat4 projection = glm::perspective (glm::radians (45.f), 1680.f / 1050.f, 0.1f, 3000.f);
-  projection[1][1] *= -1;
-  glm::mat4 mvp = projection * view * modelMatrix;
 
   { // Create instance
     VkApplicationInfo applicationInfo {APPLICATION_INFO};
@@ -313,13 +314,24 @@ int main () {
 
   { // Render loop
     bool running = true;
+    float lastTime = 0.f;
+    float deltaTime = 0.f;
+
     while (running) {
+      float currentTime = rei::utils::Timer::getCurrentTime ();
+      deltaTime = currentTime - lastTime;
+      lastTime = currentTime;
+
       xcb_generic_event_t* event = xcb_poll_for_event (window.connection);
       if (event) {
 	switch (event->response_type & ~0x80) {
 	  case XCB_KEY_PRESS: {
 	    auto key = RCAST <xcb_key_press_event_t*> (event);
 	    if (key->detail == 9) running = false;
+	    if (key->detail == 38) camera.move (rei::Camera::Direction::Left, deltaTime);
+	    if (key->detail == 40) camera.move (rei::Camera::Direction::Right, deltaTime);
+	    if (key->detail == 25) camera.move (rei::Camera::Direction::Forward, deltaTime);
+	    if (key->detail == 39) camera.move (rei::Camera::Direction::Backward, deltaTime);
 	    break;
           }
 	}
@@ -361,6 +373,7 @@ int main () {
 	vkCmdBeginRenderPass (currentFrame.commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
       }
 
+      glm::mat4 mvp = camera.projection * glm::lookAt (camera.position, camera.position + camera.front, camera.up) * modelMatrix;
       sponza.draw (currentFrame.commandBuffer, mvp);
 
       vkCmdEndRenderPass (currentFrame.commandBuffer);
