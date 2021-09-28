@@ -58,7 +58,7 @@ int main () {
     rei::extra::xcb::createWindow (createInfo, window);
   }
 
-  rei::Camera camera {glm::vec3 {0.f, 1.f, 0.f}, glm::vec3 {0.f, 5.f, -10.f}, -90.f, 0.f};
+  rei::Camera camera {glm::vec3 {0.f, 1.f, 0.f}, glm::vec3 {0.f, 100.f, -10.f}, -90.f, 0.f};
 
   VkInstance instance;
   #ifndef NDEBUG
@@ -317,13 +317,15 @@ int main () {
     float lastTime = 0.f;
     float deltaTime = 0.f;
 
+    xcb_generic_event_t* event = nullptr;
+
     while (running) {
+      camera.firstMouse = true;
       float currentTime = rei::utils::Timer::getCurrentTime ();
       deltaTime = currentTime - lastTime;
       lastTime = currentTime;
 
-      xcb_generic_event_t* event = xcb_poll_for_event (window.connection);
-      if (event) {
+      while ((event = xcb_poll_for_event (window.connection))) {
 	switch (event->response_type & ~0x80) {
 	  case XCB_KEY_PRESS: {
 	    auto key = RCAST <xcb_key_press_event_t*> (event);
@@ -332,8 +334,14 @@ int main () {
 	    if (key->detail == 40) camera.move (rei::Camera::Direction::Right, deltaTime);
 	    if (key->detail == 25) camera.move (rei::Camera::Direction::Forward, deltaTime);
 	    if (key->detail == 39) camera.move (rei::Camera::Direction::Backward, deltaTime);
-	    break;
-          }
+          } break;
+
+	  case XCB_MOTION_NOTIFY: {
+	    auto data = RCAST <xcb_motion_notify_event_t*> (event);
+	    camera.handleMouseMovement (SCAST <float> (data->event_x), SCAST <float> (data->event_y));
+	  } break;
+
+	  default: break;
 	}
 
 	free (event);

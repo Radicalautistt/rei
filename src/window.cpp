@@ -16,8 +16,18 @@ void createWindow (const WindowCreateInfo& createInfo, Window& output) {
   output.screen = rootsIterator.data;
   output.handle = xcb_generate_id (output.connection);
 
-  uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-  uint32_t values[] {output.screen->black_pixel, XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_KEY_PRESS};
+  uint32_t valueMask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+  uint32_t eventMask = XCB_EVENT_MASK_EXPOSURE |
+    XCB_EVENT_MASK_KEY_PRESS |
+    XCB_EVENT_MASK_KEY_RELEASE |
+
+    XCB_EVENT_MASK_POINTER_MOTION |
+    XCB_EVENT_MASK_BUTTON_MOTION |
+
+    XCB_EVENT_MASK_ENTER_WINDOW |
+    XCB_EVENT_MASK_LEAVE_WINDOW;
+
+  uint32_t values[] {output.screen->black_pixel, eventMask};
 
   xcb_create_window (
     output.connection,
@@ -31,7 +41,7 @@ void createWindow (const WindowCreateInfo& createInfo, Window& output) {
     0,
     XCB_WINDOW_CLASS_INPUT_OUTPUT,
     output.screen->root_visual,
-    mask,
+    valueMask,
     values
   );
 

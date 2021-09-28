@@ -16,6 +16,26 @@ void Camera::update () noexcept {
   up = glm::normalize (glm::cross (right, front));
 }
 
+
+void Camera::handleMouseMovement (float x, float y) noexcept {
+  if (firstMouse) {
+    lastX = x;
+    lastY = y;
+    firstMouse = false;
+  }
+
+  float xOffset = x - lastX, yOffset = lastY - y;
+  lastX = x;
+  lastY = y;
+
+  xOffset *= sensitivity;
+  yOffset *= sensitivity;
+  yaw += xOffset;
+  pitch += yOffset;
+
+  update ();
+}
+
 void Camera::move (Direction direction, float deltaTime) noexcept {
   float velocity = speed * deltaTime;
   switch (direction) {

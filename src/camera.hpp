@@ -22,6 +22,7 @@ struct Camera {
   glm::mat4 projection;
 
   void update () noexcept;
+  void handleMouseMovement (float x, float y) noexcept;
   void move (Direction direction, float deltaTime) noexcept;
 
   Camera (const glm::vec3& up, const glm::vec3& position, float yaw, float pitch);
