@@ -125,8 +125,8 @@ void createGraphicsPipelines (
 [[nodiscard]] VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool);
 void submitImmediateCommand (VkDevice device, const TransferContext& transferContext, VkCommandBuffer commandBuffer);
 
-void allocateBuffer (VkDevice device, VmaAllocator allocator, const BufferAllocationInfo& allocationInfo, Buffer& output);
-void allocateStagingBuffer (VkDevice device, VmaAllocator allocator, VkDeviceSize size, Buffer& output);
+void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo& allocationInfo, Buffer& output);
+void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer& output);
 void copyBuffer (VkDevice device, const TransferContext& transferContext, const Buffer& source, Buffer& destination);
 
 void allocateTexture (

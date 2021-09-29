@@ -70,7 +70,7 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
       auto availableExtensions = ALLOCA (VkExtensionProperties, extensionsCount);
       VK_CHECK (vkEnumerateDeviceExtensionProperties (current, nullptr, &extensionsCount, availableExtensions));
 
-      for (uint32_t required = 0; required < DEVICE_EXTENSIONS_COUNT; ++required) {
+      for (uint32_t required = 0; required < ARRAY_SIZE (vkcommon::requiredDeviceExtensions); ++required) {
 	supportsExtensions = false;
 
 	for (uint32_t present = 0; present < extensionsCount; ++present) {
@@ -384,7 +384,7 @@ void submitImmediateCommand (VkDevice device, const TransferContext& transferCon
   VK_CHECK (vkResetCommandPool (device, transferContext.commandPool, VULKAN_NO_FLAGS));
 }
 
-void allocateBuffer (VkDevice device, VmaAllocator allocator, const BufferAllocationInfo& allocationInfo, Buffer& output) {
+void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo& allocationInfo, Buffer& output) {
   VkBufferCreateInfo createInfo {BUFFER_CREATE_INFO};
   createInfo.size = allocationInfo.size;
   createInfo.usage = allocationInfo.bufferUsage;
@@ -405,7 +405,7 @@ void allocateBuffer (VkDevice device, VmaAllocator allocator, const BufferAlloca
   ));
 }
 
-void allocateStagingBuffer (VkDevice device, VmaAllocator allocator, VkDeviceSize size, Buffer& output) {
+void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer& output) {
   rei::vkutils::BufferAllocationInfo allocationInfo;
   allocationInfo.size = size;
   allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY;
@@ -413,7 +413,7 @@ void allocateStagingBuffer (VkDevice device, VmaAllocator allocator, VkDeviceSiz
   allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
   allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-  rei::vkutils::allocateBuffer (device, allocator, allocationInfo, output);
+  rei::vkutils::allocateBuffer (allocator, allocationInfo, output);
 }
 
 void copyBuffer (VkDevice device, const TransferContext& transferContext, const Buffer& source, Buffer& destination) {
@@ -441,7 +441,7 @@ void allocateTexture (
   VkDeviceSize size = SCAST <VkDeviceSize> (extent.width * extent.height * 4);
 
   Buffer stagingBuffer;
-  allocateStagingBuffer (device, allocator, size, stagingBuffer);
+  allocateStagingBuffer (allocator, size, stagingBuffer);
 
   VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
   memcpy (stagingBuffer.mapped, allocationInfo.pixels, size);

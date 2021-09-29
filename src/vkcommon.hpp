@@ -14,18 +14,6 @@
 #  define VULKAN_NO_FLAGS 0u
 #endif
 
-#ifndef DEVICE_EXTENSIONS_COUNT
-#  define DEVICE_EXTENSIONS_COUNT 1u
-#endif
-
-#ifndef INSTANCE_EXTENSIONS_COUNT
-#  ifndef NDEBUG
-#    define INSTANCE_EXTENSIONS_COUNT 3u
-#  else
-#    define INSTANCE_EXTENSIONS_COUNT 2u
-#  endif
-#endif
-
 #ifdef NDEBUG
 #  ifndef VK_CHECK
 #    define VK_CHECK(call) call
@@ -57,7 +45,7 @@ constexpr const char* validationLayers[] {
 };
 #endif
 
-constexpr const char* requiredInstanceExtensions[INSTANCE_EXTENSIONS_COUNT] = {
+constexpr const char* requiredInstanceExtensions[] = {
   VK_KHR_SURFACE_EXTENSION_NAME,
   VK_KHR_XCB_SURFACE_EXTENSION_NAME,
 #ifndef NDEBUG
@@ -65,7 +53,7 @@ constexpr const char* requiredInstanceExtensions[INSTANCE_EXTENSIONS_COUNT] = {
 #endif
 };
 
-constexpr const char* requiredDeviceExtensions[DEVICE_EXTENSIONS_COUNT] {
+constexpr const char* requiredDeviceExtensions[] {
   VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 

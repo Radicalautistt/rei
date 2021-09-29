@@ -89,7 +89,7 @@ void loadModel (
   {
     vkutils::Buffer stagingBuffer;
     VkDeviceSize vertexBufferSize = sizeof (Vertex) * vertexCount;
-    vkutils::allocateStagingBuffer (device, allocator, vertexBufferSize, stagingBuffer);
+    vkutils::allocateStagingBuffer (allocator, vertexBufferSize, stagingBuffer);
 
     VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
     memcpy (stagingBuffer.mapped, vertices, vertexBufferSize);
@@ -103,7 +103,7 @@ void loadModel (
       allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
       allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-      vkutils::allocateBuffer (device, allocator, allocationInfo, output.vertexBuffer);
+      vkutils::allocateBuffer (allocator, allocationInfo, output.vertexBuffer);
     }
 
     vkutils::copyBuffer (device, transferContext, stagingBuffer, output.vertexBuffer);
@@ -115,7 +115,7 @@ void loadModel (
   {
     vkutils::Buffer stagingBuffer;
     VkDeviceSize indexBufferSize = sizeof (uint32_t) * indexCount;
-    vkutils::allocateStagingBuffer (device, allocator, indexBufferSize, stagingBuffer);
+    vkutils::allocateStagingBuffer (allocator, indexBufferSize, stagingBuffer);
 
     VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
     memcpy (stagingBuffer.mapped, indices, indexBufferSize);
@@ -129,7 +129,7 @@ void loadModel (
       allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-      vkutils::allocateBuffer (device, allocator, allocationInfo, output.indexBuffer);
+      vkutils::allocateBuffer (allocator, allocationInfo, output.indexBuffer);
     }
 
     vkutils::copyBuffer (device, transferContext, stagingBuffer, output.indexBuffer);

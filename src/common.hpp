@@ -7,6 +7,8 @@
 #define SCAST static_cast
 #define RCAST reinterpret_cast
 
+#define ARRAY_SIZE(array) sizeof (array) / sizeof *array
+
 #define ALLOCA(Type, count) SCAST <Type*> (alloca (sizeof (Type) * count))
 #define MALLOC(Type, count) SCAST <Type*> (malloc (sizeof (Type) * count))
 

@@ -2,6 +2,7 @@
 
 #include "vk.hpp"
 #include "utils.hpp"
+#include "imgui.hpp"
 #include "common.hpp"
 #include "camera.hpp"
 #include "vkinit.hpp"
@@ -11,7 +12,6 @@
 #include "gltf_model.hpp"
 
 #include <xcb/xcb.h>
-#include <stb/stb_image.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
@@ -80,6 +80,10 @@ int main () {
   VkFramebuffer* framebuffers;
   VkClearValue clearValues[2] {};
 
+  VkDescriptorPool mainDescriptorPool;
+
+  rei::extra::imgui::Context imguiContext;
+
   rei::vkutils::TransferContext transferContext;
 
   rei::gltf::Model sponza;
@@ -88,21 +92,21 @@ int main () {
 
   { // Create instance
     VkApplicationInfo applicationInfo {APPLICATION_INFO};
-    applicationInfo.apiVersion = VULKAN_VERSION;
     applicationInfo.pEngineName = "Rei";
+    applicationInfo.apiVersion = VULKAN_VERSION;
     applicationInfo.pApplicationName = "Playground";
 
     VkInstanceCreateInfo createInfo {INSTANCE_CREATE_INFO};
     createInfo.pApplicationInfo = &applicationInfo;
-    createInfo.enabledExtensionCount = INSTANCE_EXTENSIONS_COUNT;
     createInfo.ppEnabledExtensionNames = rei::vkcommon::requiredInstanceExtensions;
+    createInfo.enabledExtensionCount = ARRAY_SIZE (rei::vkcommon::requiredInstanceExtensions);
 
     #ifndef NDEBUG
     auto debugMessengerInfo = rei::vkinit::debugMessengerInfo ();
 
-    createInfo.enabledLayerCount = 1;
     createInfo.pNext = &debugMessengerInfo;
     createInfo.ppEnabledLayerNames = rei::vkcommon::validationLayers;
+    createInfo.enabledLayerCount = ARRAY_SIZE (rei::vkcommon::validationLayers);
     #endif
 
     VK_CHECK (vkCreateInstance (&createInfo, nullptr, &instance));
@@ -146,8 +150,8 @@ int main () {
     createInfo.queueCreateInfoCount = 1;
     createInfo.pQueueCreateInfos = &queueInfo;
     createInfo.pEnabledFeatures = &enabledFeatures;
-    createInfo.enabledExtensionCount = DEVICE_EXTENSIONS_COUNT;
     createInfo.ppEnabledExtensionNames = rei::vkcommon::requiredDeviceExtensions;
+    createInfo.enabledExtensionCount = ARRAY_SIZE (rei::vkcommon::requiredDeviceExtensions);
 
     VK_CHECK (vkCreateDevice (physicalDevice, &createInfo, nullptr, &device));
 
@@ -306,6 +310,31 @@ int main () {
     VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &transferContext.fence));
   }
 
+  { // Create main descriptor pool
+    VkDescriptorPoolSize sizes[1];
+    sizes[0].descriptorCount = 1;
+    sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+    VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
+    createInfo.maxSets = 1;
+    createInfo.pPoolSizes = sizes;
+    createInfo.poolSizeCount = ARRAY_SIZE (sizes);
+
+    VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &mainDescriptorPool));
+  }
+
+  { // Create imgui context
+    rei::extra::imgui::ContextCreateInfo createInfo;
+    createInfo.device = device;
+    createInfo.allocator = allocator;
+    createInfo.renderPass = renderPass;
+    createInfo.pipelineCache = VK_NULL_HANDLE;
+    createInfo.transferContext = &transferContext;
+    createInfo.descriptorPool = mainDescriptorPool;
+
+    rei::extra::imgui::create (createInfo, imguiContext);
+  }
+
   rei::gltf::loadModel (device, allocator, transferContext, "assets/models/sponza-scene/Sponza.gltf", sponza);
 
   sponza.initDescriptorPool (device);
@@ -371,12 +400,12 @@ int main () {
 
       { // Begin render pass
         VkRenderPassBeginInfo beginInfo {RENDER_PASS_BEGIN_INFO};
-	beginInfo.clearValueCount = 2;
-	beginInfo.pClearValues = clearValues;
 	beginInfo.renderPass = renderPass;
 	beginInfo.renderArea.offset = {0, 0};
+	beginInfo.pClearValues = clearValues;
 	beginInfo.renderArea.extent = swapchain.extent;
 	beginInfo.framebuffer = framebuffers[imageIndex];
+	beginInfo.clearValueCount = ARRAY_SIZE (clearValues);
 
 	vkCmdBeginRenderPass (currentFrame.commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
       }
@@ -419,6 +448,9 @@ int main () {
   vkDeviceWaitIdle (device);
 
   rei::gltf::destroyModel (device, allocator, sponza);
+  rei::extra::imgui::destroy (device, allocator, imguiContext);
+
+  vkDestroyDescriptorPool (device, mainDescriptorPool, nullptr);
 
   vkDestroyFence (device, transferContext.fence, nullptr);
   vkDestroyCommandPool (device, transferContext.commandPool, nullptr);
