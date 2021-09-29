@@ -17,6 +17,7 @@ struct ContextCreateInfo {
   vkutils::TransferContext* transferContext;
 
   VkRenderPass renderPass;
+  vkutils::Swapchain* swapchain;
 };
 
 struct Context {
