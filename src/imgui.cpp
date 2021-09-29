@@ -7,11 +7,162 @@
 
 namespace rei::extra::imgui {
 
+void Context::updateBuffers (const ImDrawData* drawData) {
+  if (drawData->TotalVtxCount) {
+    counts.index = drawData->TotalIdxCount;
+    counts.vertex = drawData->TotalVtxCount;
+
+    VkDeviceSize indexBufferSize = sizeof (ImDrawIdx) * counts.index;
+    VkDeviceSize vertexBufferSize = sizeof (ImDrawVert) * counts.vertex;
+
+    if (vertexBuffer.allocation) {
+      vmaUnmapMemory (allocator, vertexBuffer.allocation);
+      vmaDestroyBuffer (allocator, vertexBuffer.handle, vertexBuffer.allocation);
+    }
+
+    {
+      vkutils::BufferAllocationInfo allocationInfo;
+      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+      allocationInfo.size = sizeof (ImDrawVert) * counts.vertex;
+      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+      allocationInfo.bufferUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+      allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+      vkutils::allocateBuffer (allocator, allocationInfo, vertexBuffer);
+    }
+
+    VK_CHECK (vmaMapMemory (allocator, vertexBuffer.allocation, &vertexBuffer.mapped));
+
+    if (indexBuffer.allocation) {
+      vmaUnmapMemory (allocator, indexBuffer.allocation);
+      vmaDestroyBuffer (allocator, indexBuffer.handle, indexBuffer.allocation);
+    }
+
+    {
+      vkutils::BufferAllocationInfo allocationInfo;
+      allocationInfo.size = sizeof (ImDrawIdx) * counts.index;
+      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+      allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+      allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+      vkutils::allocateBuffer (allocator, allocationInfo, indexBuffer);
+    }
+
+    VK_CHECK (vmaMapMemory (allocator, indexBuffer.allocation, &indexBuffer.mapped));
+
+    for (int index = 0; index < drawData->CmdListsCount; ++index) {
+      const ImDrawList* current = drawData->CmdLists[index];
+      auto indices = RCAST <ImDrawIdx*> (indexBuffer.mapped);
+      auto vertices = RCAST <ImDrawVert*> (vertexBuffer.mapped);
+
+      memcpy (indices, current->IdxBuffer.Data, sizeof (ImDrawIdx) * current->IdxBuffer.Size);
+      memcpy (vertices, current->VtxBuffer.Data, sizeof (ImDrawVert) * current->VtxBuffer.Size);
+
+      indices += current->IdxBuffer.Size;
+      vertices += current->VtxBuffer.Size;
+    }
+
+    VK_CHECK (vmaFlushAllocation (allocator, indexBuffer.allocation, 0, indexBufferSize));
+    VK_CHECK (vmaFlushAllocation (allocator, vertexBuffer.allocation, 0, vertexBufferSize));
+  }
+}
+
+void Context::newFrame () {
+  ImGuiIO& io = ImGui::GetIO ();
+  io.DisplaySize.x = 1680;
+  io.DisplaySize.y = 1050;
+
+  ImGui::NewFrame ();
+}
+
+void Context::renderDrawData (const ImDrawData* drawData, VkCommandBuffer commandBuffer) {
+  vkCmdBindDescriptorSets (
+    commandBuffer,
+    VK_PIPELINE_BIND_POINT_GRAPHICS,
+    pipelineLayout,
+    0,
+    1, &descriptorSet,
+    0, nullptr
+  );
+
+  vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+  {
+    VkViewport viewport;
+    viewport.x = 0;
+    viewport.y = 0;
+    viewport.width = 1680;
+    viewport.height = 1050;
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+
+    vkCmdSetViewport (commandBuffer, 0, 1, &viewport);
+
+    glm::vec2 pushConstants[2];
+    pushConstants[1] = glm::vec2 {-1.f};
+    pushConstants[0] = glm::vec2 {2.f / 1680.f, 2.f / 1050.f};
+
+    vkCmdPushConstants (
+      commandBuffer,
+      pipelineLayout,
+      VK_SHADER_STAGE_VERTEX_BIT,
+      0,
+      sizeof (glm::vec2) * 2,
+      pushConstants
+    );
+  }
+
+  if (drawData->CmdListsCount) {
+    VkDeviceSize offset = 0;
+    int32_t vertexOffset = 0;
+    uint32_t indexOffset = 0;
+
+    vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffer.handle, &offset);
+    vkCmdBindIndexBuffer (commandBuffer, indexBuffer.handle, offset, VK_INDEX_TYPE_UINT16);
+
+    for (int32_t list = 0; list < drawData->CmdListsCount; ++list) {
+      const ImDrawList* commandList = drawData->CmdLists[list];
+
+      for (int32_t command = 0; command < commandList->CmdBuffer.Size; ++command) {
+	const ImDrawCmd* drawCommand = &commandList->CmdBuffer[command];
+
+	VkRect2D scissor;
+	scissor.offset.x = MAX (SCAST <int32_t> (drawCommand->ClipRect.x), 0);
+	scissor.offset.y = MAX (SCAST <int32_t> (drawCommand->ClipRect.y), 0);
+	scissor.extent.width = SCAST <uint32_t> (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
+	scissor.extent.height = SCAST <uint32_t> (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
+
+	vkCmdSetScissor (commandBuffer, 0, 1, &scissor);
+
+	vkCmdDrawIndexed (
+	  commandBuffer,
+	  drawCommand->ElemCount,
+	  1,
+	  drawCommand->IdxOffset + indexOffset,
+	  drawCommand->VtxOffset + vertexOffset,
+          0
+	);
+      }
+
+      indexOffset += commandList->IdxBuffer.Size;
+      vertexOffset += commandList->VtxBuffer.Size;
+    }
+  }
+}
+
 void create (const ContextCreateInfo& createInfo, Context& output) {
   output.handle = ImGui::CreateContext ();
   output.device = createInfo.device;
   output.allocator = createInfo.allocator;
   output.transferContext = createInfo.transferContext;
+
+  output.indexBuffer.handle = VK_NULL_HANDLE;
+  output.vertexBuffer.handle = VK_NULL_HANDLE;
+  output.indexBuffer.allocation = VK_NULL_HANDLE;
+  output.vertexBuffer.allocation = VK_NULL_HANDLE;
 
   { // Create font texture
     int width, height;
@@ -213,9 +364,30 @@ void create (const ContextCreateInfo& createInfo, Context& output) {
       &output.pipeline
     );
   }
+
+  // Set color theme
+  ImGui::StyleColorsClassic ();
+  auto& style = ImGui::GetStyle ();
+
+  style.WindowRounding = 0.f;
+  style.ScrollbarRounding = 0.f;
+  style.Colors[ImGuiCol_WindowBg].w = 1.f;
+  style.Colors[ImGuiCol_TitleBg] = {0.f, 0.f, 0.f, 1.f};
+  style.Colors[ImGuiCol_ScrollbarBg] = {0.f, 0.f, 0.f, 1.f};
+  style.Colors[ImGuiCol_TitleBgActive] = {0.f, 0.f, 0.f, 1.f};
 }
 
 void destroy (VkDevice device, VmaAllocator allocator, Context& context) {
+  if (context.indexBuffer.allocation) {
+    vmaUnmapMemory (allocator, context.indexBuffer.allocation);
+    vmaDestroyBuffer (allocator, context.indexBuffer.handle, context.indexBuffer.allocation);
+  }
+
+  if (context.vertexBuffer.allocation) {
+    vmaUnmapMemory (allocator, context.vertexBuffer.allocation);
+    vmaDestroyBuffer (allocator, context.vertexBuffer.handle, context.vertexBuffer.allocation);
+  }
+
   vkDestroyPipelineLayout (device, context.pipelineLayout, nullptr);
   vkDestroyPipeline (device, context.pipeline, nullptr);
   vkDestroyDescriptorSetLayout (device, context.descriptorSetLayout, nullptr);

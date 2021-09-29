@@ -113,6 +113,8 @@ extern PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
   X (vkDestroyPipelineCache)                    \
   X (vkCreatePipelineLayout)                    \
   X (vkDestroyPipelineLayout)                   \
+  X (vkCmdSetViewport)                          \
+  X (vkCmdSetScissor)                           \
                                                 \
   X (vkCreateDescriptorPool)                    \
   X (vkDestroyDescriptorPool)                   \

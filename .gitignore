@@ -46,5 +46,6 @@ utils/compile_shaders
 *.rtex
 *.rmesh
 
-# Coc language server configuration
+# Miscellanea
 .ccls
+imgui.ini

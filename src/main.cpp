@@ -13,6 +13,7 @@
 
 #include <xcb/xcb.h>
 #include <glm/glm.hpp>
+#include <imgui/imgui.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
@@ -42,21 +43,7 @@ constexpr Vertex2D quadVertices[4] {
 constexpr uint16_t quadIndices[6] {0, 1, 3, 1, 2, 3};
 
 int main () {
-  rei::utils::Timer::init ();
-  VulkanContext::init ();
-
   rei::extra::xcb::Window window;
-
-  { // Create window
-    rei::extra::xcb::WindowCreateInfo createInfo;
-    createInfo.x = 0;
-    createInfo.y = 0;
-    createInfo.width = 640;
-    createInfo.height = 480;
-    createInfo.name = "Rei playground";
-
-    rei::extra::xcb::createWindow (createInfo, window);
-  }
 
   rei::Camera camera {glm::vec3 {0.f, 1.f, 0.f}, glm::vec3 {0.f, 100.f, -10.f}, -90.f, 0.f};
 
@@ -89,6 +76,20 @@ int main () {
   rei::gltf::Model sponza;
 
   glm::mat4 modelMatrix = glm::translate (glm::mat4 {1.f}, glm::vec3 {0.f, 0.f, 1.f});
+
+  rei::utils::Timer::init ();
+  VulkanContext::init ();
+
+  { // Create window
+    rei::extra::xcb::WindowCreateInfo createInfo;
+    createInfo.x = 0;
+    createInfo.y = 0;
+    createInfo.width = 640;
+    createInfo.height = 480;
+    createInfo.name = "Rei playground";
+
+    rei::extra::xcb::createWindow (createInfo, window);
+  }
 
   { // Create instance
     VkApplicationInfo applicationInfo {APPLICATION_INFO};
@@ -353,6 +354,7 @@ int main () {
       float currentTime = rei::utils::Timer::getCurrentTime ();
       deltaTime = currentTime - lastTime;
       lastTime = currentTime;
+      ImGui::GetIO().DeltaTime = deltaTime;
 
       while ((event = xcb_poll_for_event (window.connection))) {
 	switch (event->response_type & ~0x80) {
@@ -413,6 +415,13 @@ int main () {
       glm::mat4 mvp = camera.projection * glm::lookAt (camera.position, camera.position + camera.front, camera.up) * modelMatrix;
       sponza.draw (currentFrame.commandBuffer, mvp);
 
+      imguiContext.newFrame ();
+      ImGui::ShowMetricsWindow ();
+      ImGui::Render ();
+      const ImDrawData* drawData = ImGui::GetDrawData ();
+      imguiContext.updateBuffers (drawData);
+      imguiContext.renderDrawData (drawData, currentFrame.commandBuffer);
+
       vkCmdEndRenderPass (currentFrame.commandBuffer);
       VK_CHECK (vkEndCommandBuffer (currentFrame.commandBuffer));
 
@@ -441,6 +450,9 @@ int main () {
 
       VK_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
       ++frameIndex;
+      // Wait for commands sent to the current frame's command buffer to finish,
+      // so that we can safely destroy/update dynamic buffers in the next frame.
+      vkQueueWaitIdle (graphicsQueue);
     }
   }
 

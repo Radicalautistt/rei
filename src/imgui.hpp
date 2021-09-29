@@ -3,6 +3,7 @@
 
 #include "vkutils.hpp"
 
+struct ImDrawData;
 struct ImGuiContext;
 
 namespace rei::extra::imgui {
@@ -44,6 +45,10 @@ struct Context {
   vkutils::Buffer vertexBuffer;
 
   vkutils::Image fontTexture;
+
+  void newFrame ();
+  void updateBuffers (const ImDrawData* drawData);
+  void renderDrawData (const ImDrawData* drawData, VkCommandBuffer commandBuffer);
 };
 
 void create (const ContextCreateInfo& createInfo, Context& output);
