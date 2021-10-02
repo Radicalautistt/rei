@@ -320,6 +320,7 @@ int main () {
     createInfo.maxSets = 1;
     createInfo.pPoolSizes = sizes;
     createInfo.poolSizeCount = ARRAY_SIZE (sizes);
+    createInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &mainDescriptorPool));
   }
@@ -327,6 +328,7 @@ int main () {
   { // Create imgui context
     rei::extra::imgui::ContextCreateInfo createInfo;
     createInfo.device = device;
+    createInfo.window = &window;
     createInfo.allocator = allocator;
     createInfo.renderPass = renderPass;
     createInfo.pipelineCache = VK_NULL_HANDLE;
@@ -374,6 +376,8 @@ int main () {
 
 	  default: break;
 	}
+
+	imguiContext.handleEvents (event);
 
 	free (event);
       }

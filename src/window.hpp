@@ -19,6 +19,8 @@ struct Window {
   uint32_t handle;
   xcb_connection_t* connection;
   xcb_screen_t* screen;
+
+  void getMousePosition (float* output);
 };
 
 void createWindow (const WindowCreateInfo& createInfo, Window& output);

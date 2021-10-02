@@ -45,7 +45,7 @@ constexpr const char* validationLayers[] {
 };
 #endif
 
-constexpr const char* requiredInstanceExtensions[] = {
+constexpr const char* requiredInstanceExtensions[] {
   VK_KHR_SURFACE_EXTENSION_NAME,
   VK_KHR_XCB_SURFACE_EXTENSION_NAME,
 #ifndef NDEBUG

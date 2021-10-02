@@ -354,7 +354,7 @@ void createGraphicsPipelines (
   free (infos);
 }
 
-[[nodiscard]] VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool) {
+VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool) {
   VkCommandBuffer commandBuffer;
 
   VkCommandBufferAllocateInfo allocationInfo {COMMAND_BUFFER_ALLOCATE_INFO};

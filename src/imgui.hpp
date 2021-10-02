@@ -6,6 +6,12 @@
 struct ImDrawData;
 struct ImGuiContext;
 
+namespace rei::extra::xcb {
+
+struct Window;
+
+}
+
 namespace rei::extra::imgui {
 
 struct ContextCreateInfo {
@@ -15,6 +21,7 @@ struct ContextCreateInfo {
   VkPipelineCache pipelineCache;
 
   VkDescriptorPool descriptorPool;
+  extra::xcb::Window* window;
   vkutils::TransferContext* transferContext;
 
   VkRenderPass renderPass;
@@ -39,6 +46,7 @@ struct Context {
   VkDescriptorSet descriptorSet;
   VkSampler fontSampler;
 
+  extra::xcb::Window* window;
   vkutils::TransferContext* transferContext;
 
   vkutils::Buffer indexBuffer;
@@ -48,6 +56,7 @@ struct Context {
 
   void newFrame ();
   void updateBuffers (const ImDrawData* drawData);
+  void handleEvents (const xcb_generic_event_t* event);
   void renderDrawData (const ImDrawData* drawData, VkCommandBuffer commandBuffer);
 };
 

@@ -1,11 +1,20 @@
 #include <string.h>
 
 #include <xcb/xcb.h>
+#include <xcb/xproto.h>
 
 #include "common.hpp"
 #include "window.hpp"
 
 namespace rei::extra::xcb {
+
+void Window::getMousePosition (float* output) {
+  auto result = xcb_query_pointer_unchecked (connection, handle);
+  auto reply = xcb_query_pointer_reply (connection, result, nullptr);
+
+  output[0] = SCAST <float> (reply->win_x);
+  output[1] = SCAST <float> (reply->win_y);
+}
 
 void createWindow (const WindowCreateInfo& createInfo, Window& output) {
   output.width = createInfo.width;
@@ -20,6 +29,9 @@ void createWindow (const WindowCreateInfo& createInfo, Window& output) {
   uint32_t eventMask = XCB_EVENT_MASK_EXPOSURE |
     XCB_EVENT_MASK_KEY_PRESS |
     XCB_EVENT_MASK_KEY_RELEASE |
+
+    XCB_EVENT_MASK_BUTTON_PRESS |
+    XCB_EVENT_MASK_BUTTON_RELEASE |
 
     XCB_EVENT_MASK_POINTER_MOTION |
     XCB_EVENT_MASK_BUTTON_MOTION |
