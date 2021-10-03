@@ -3,6 +3,10 @@
 #include <assert.h>
 #include <stdlib.h>
 
+// FIXME remove this
+#include <vector>
+#include <algorithm>
+
 #include "gltf.hpp"
 #include "common.hpp"
 #include "gltf_model.hpp"
@@ -44,44 +48,51 @@ void loadModel (
     result = RCAST <const float*> (&gltf.buffer[accessor.byteOffset + bufferView.byteOffset]); \
   } while (false)
 
-  for (size_t primitive = 0; primitive < gltf.mesh.primitivesCount; ++primitive) {
-    const auto& currentPrimitive = gltf.mesh.primitives[primitive];
+  {
+    std::vector <assets::gltf::Primitive> sortedPrimitives;
+    sortedPrimitives.resize (output.primitivesCount);
+    memcpy (sortedPrimitives.data (), gltf.mesh.primitives, sizeof (assets::gltf::Primitive) * output.primitivesCount);
+    std::sort (sortedPrimitives.begin (), sortedPrimitives.end (), [](auto& a, auto& b){return a.material < b.material;});
 
-    uint32_t firstIndex = indexOffset;
-    uint32_t vertexStart = vertexOffset;
+    for (size_t primitive = 0; primitive < gltf.mesh.primitivesCount; ++primitive) {
+      const auto& currentPrimitive = gltf.mesh.primitives[primitive];
 
-    const float* uvAccessor = nullptr;
-    const float* normalAccessor = nullptr;
-    const float* positionAccessor = nullptr;
+      uint32_t firstIndex = indexOffset;
+      uint32_t vertexStart = vertexOffset;
 
-    GET_ACCESSOR (uv, uvAccessor);
-    GET_ACCESSOR (normal, normalAccessor);
-    GET_ACCESSOR (position, positionAccessor);
+      const float* uvAccessor = nullptr;
+      const float* normalAccessor = nullptr;
+      const float* positionAccessor = nullptr;
 
-    uint8_t uvStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec2);
-    uint8_t positionStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec3);
+      GET_ACCESSOR (uv, uvAccessor);
+      GET_ACCESSOR (normal, normalAccessor);
+      GET_ACCESSOR (position, positionAccessor);
 
-    uint32_t currentVertexCount = gltf.accessors[currentPrimitive.attributes.position].count;
+      uint8_t uvStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec2);
+      uint8_t positionStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec3);
 
-    for (uint32_t vertex = 0; vertex < currentVertexCount; ++vertex) {
-      auto& newVertex = vertices[vertexOffset++];
+      uint32_t currentVertexCount = gltf.accessors[currentPrimitive.attributes.position].count;
 
-      memcpy (&newVertex.u, &uvAccessor[vertex * uvStride], sizeof (float) * 2);
-      memcpy (&newVertex.nx, &normalAccessor[vertex * positionStride], sizeof (float) * 3);
-      memcpy (&newVertex.x, &positionAccessor[vertex * positionStride], sizeof (float) * 3);
+      for (uint32_t vertex = 0; vertex < currentVertexCount; ++vertex) {
+        auto& newVertex = vertices[vertexOffset++];
+
+        memcpy (&newVertex.u, &uvAccessor[vertex * uvStride], sizeof (float) * 2);
+        memcpy (&newVertex.nx, &normalAccessor[vertex * positionStride], sizeof (float) * 3);
+        memcpy (&newVertex.x, &positionAccessor[vertex * positionStride], sizeof (float) * 3);
+      }
+
+      const auto& accessor = gltf.accessors[currentPrimitive.indices];
+      const auto& bufferView = gltf.bufferViews[accessor.bufferView];
+      const auto indexAccessor = RCAST <const uint16_t*> (&gltf.buffer[accessor.byteOffset + bufferView.byteOffset]);
+
+      for (uint32_t index = 0; index < accessor.count; ++index)
+        indices[indexOffset++] = indexAccessor[index] + vertexStart;
+
+      auto& newPrimitive = output.primitives[primitive];
+      newPrimitive.firstIndex = firstIndex;
+      newPrimitive.indexCount = accessor.count;
+      newPrimitive.materialIndex = currentPrimitive.material;
     }
-
-    const auto& accessor = gltf.accessors[currentPrimitive.indices];
-    const auto& bufferView = gltf.bufferViews[accessor.bufferView];
-    const auto indexAccessor = RCAST <const uint16_t*> (&gltf.buffer[accessor.byteOffset + bufferView.byteOffset]);
-
-    for (uint32_t index = 0; index < accessor.count; ++index)
-      indices[indexOffset++] = indexAccessor[index] + vertexStart;
-
-    auto& newPrimitive = output.primitives[primitive];
-    newPrimitive.firstIndex = firstIndex;
-    newPrimitive.indexCount = accessor.count;
-    newPrimitive.materialIndex = currentPrimitive.material;
   }
 
   #undef GET_ACCESSOR
@@ -408,17 +419,23 @@ void Model::draw (VkCommandBuffer commandBuffer, const glm::mat4& mvp) {
 
   vkCmdPushConstants (commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (glm::mat4), &mvp);
 
+  uint32_t previousMaterial = ~0u;
+
   for (uint32_t index = 0; index < primitivesCount; ++index) {
     const auto& current = primitives[index];
 
-    vkCmdBindDescriptorSets (
-      commandBuffer,
-      VK_PIPELINE_BIND_POINT_GRAPHICS,
-      pipelineLayout,
-      0,
-      1, &materials[current.materialIndex].descriptorSet,
-      0, nullptr
-    );
+    if (current.materialIndex != previousMaterial) {
+      vkCmdBindDescriptorSets (
+        commandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipelineLayout,
+        0,
+        1, &materials[current.materialIndex].descriptorSet,
+        0, nullptr
+      );
+
+      previousMaterial = current.materialIndex;
+    }
 
     vkCmdDrawIndexed (commandBuffer, current.indexCount, 1, current.firstIndex, 0, 0);
   }
