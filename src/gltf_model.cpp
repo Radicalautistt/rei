@@ -3,15 +3,11 @@
 #include <assert.h>
 #include <stdlib.h>
 
-// FIXME remove this
-#include <vector>
-#include <algorithm>
-
 #include "gltf.hpp"
 #include "common.hpp"
 #include "gltf_model.hpp"
+#include "asset_baker.hpp"
 
-#include <stb/stb_image.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
 namespace rei::gltf {
@@ -48,51 +44,44 @@ void loadModel (
     result = RCAST <const float*> (&gltf.buffer[accessor.byteOffset + bufferView.byteOffset]); \
   } while (false)
 
-  {
-    std::vector <assets::gltf::Primitive> sortedPrimitives;
-    sortedPrimitives.resize (output.primitivesCount);
-    memcpy (sortedPrimitives.data (), gltf.mesh.primitives, sizeof (assets::gltf::Primitive) * output.primitivesCount);
-    std::sort (sortedPrimitives.begin (), sortedPrimitives.end (), [](auto& a, auto& b){return a.material < b.material;});
+  for (size_t primitive = 0; primitive < gltf.mesh.primitivesCount; ++primitive) {
+    const auto& currentPrimitive = gltf.mesh.primitives[primitive];
 
-    for (size_t primitive = 0; primitive < gltf.mesh.primitivesCount; ++primitive) {
-      const auto& currentPrimitive = gltf.mesh.primitives[primitive];
+    uint32_t firstIndex = indexOffset;
+    uint32_t vertexStart = vertexOffset;
 
-      uint32_t firstIndex = indexOffset;
-      uint32_t vertexStart = vertexOffset;
+    const float* uvAccessor = nullptr;
+    const float* normalAccessor = nullptr;
+    const float* positionAccessor = nullptr;
 
-      const float* uvAccessor = nullptr;
-      const float* normalAccessor = nullptr;
-      const float* positionAccessor = nullptr;
+    GET_ACCESSOR (uv, uvAccessor);
+    GET_ACCESSOR (normal, normalAccessor);
+    GET_ACCESSOR (position, positionAccessor);
 
-      GET_ACCESSOR (uv, uvAccessor);
-      GET_ACCESSOR (normal, normalAccessor);
-      GET_ACCESSOR (position, positionAccessor);
+    uint8_t uvStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec2);
+    uint8_t positionStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec3);
 
-      uint8_t uvStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec2);
-      uint8_t positionStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec3);
+    uint32_t currentVertexCount = gltf.accessors[currentPrimitive.attributes.position].count;
 
-      uint32_t currentVertexCount = gltf.accessors[currentPrimitive.attributes.position].count;
+    for (uint32_t vertex = 0; vertex < currentVertexCount; ++vertex) {
+      auto& newVertex = vertices[vertexOffset++];
 
-      for (uint32_t vertex = 0; vertex < currentVertexCount; ++vertex) {
-        auto& newVertex = vertices[vertexOffset++];
-
-        memcpy (&newVertex.u, &uvAccessor[vertex * uvStride], sizeof (float) * 2);
-        memcpy (&newVertex.nx, &normalAccessor[vertex * positionStride], sizeof (float) * 3);
-        memcpy (&newVertex.x, &positionAccessor[vertex * positionStride], sizeof (float) * 3);
-      }
-
-      const auto& accessor = gltf.accessors[currentPrimitive.indices];
-      const auto& bufferView = gltf.bufferViews[accessor.bufferView];
-      const auto indexAccessor = RCAST <const uint16_t*> (&gltf.buffer[accessor.byteOffset + bufferView.byteOffset]);
-
-      for (uint32_t index = 0; index < accessor.count; ++index)
-        indices[indexOffset++] = indexAccessor[index] + vertexStart;
-
-      auto& newPrimitive = output.primitives[primitive];
-      newPrimitive.firstIndex = firstIndex;
-      newPrimitive.indexCount = accessor.count;
-      newPrimitive.materialIndex = currentPrimitive.material;
+      memcpy (&newVertex.u, &uvAccessor[vertex * uvStride], sizeof (float) * 2);
+      memcpy (&newVertex.nx, &normalAccessor[vertex * positionStride], sizeof (float) * 3);
+      memcpy (&newVertex.x, &positionAccessor[vertex * positionStride], sizeof (float) * 3);
     }
+
+    const auto& accessor = gltf.accessors[currentPrimitive.indices];
+    const auto& bufferView = gltf.bufferViews[accessor.bufferView];
+    const auto indexAccessor = RCAST <const uint16_t*> (&gltf.buffer[accessor.byteOffset + bufferView.byteOffset]);
+
+    for (uint32_t index = 0; index < accessor.count; ++index)
+      indices[indexOffset++] = indexAccessor[index] + vertexStart;
+
+    auto& newPrimitive = output.primitives[primitive];
+    newPrimitive.firstIndex = firstIndex;
+    newPrimitive.indexCount = accessor.count;
+    newPrimitive.materialIndex = currentPrimitive.material;
   }
 
   #undef GET_ACCESSOR
@@ -152,6 +141,8 @@ void loadModel (
   output.texturesCount = SCAST <uint32_t> (gltf.imagesCount);
   output.textures = MALLOC (vkutils::Image, gltf.imagesCount);
 
+  simdjson::ondemand::parser parser;
+
   for (size_t index = 0; index < gltf.imagesCount; ++index) {
     const auto& current = gltf.images[index];
 
@@ -160,15 +151,24 @@ void loadModel (
 
     char* fileName = strrchr (texturePath, '/');
     strcpy (fileName + 1, current.uri);
+    char* extension = strrchr (texturePath, '.');
+    strcpy (extension + 1, "rtex");
 
-    int width, height, channels;
-    auto pixels = stbi_load (texturePath, &width, &height, &channels, STBI_rgb_alpha);
-    assert (pixels);
+    assets::baker::Asset asset;
+    assets::baker::readAsset (texturePath, parser, asset);
+
+    simdjson::padded_string paddedMetadata {asset.metadata, strlen (asset.metadata)};
+    simdjson::ondemand::document metadata = parser.iterate (paddedMetadata);
+
+    uint32_t width = SCAST <uint32_t> (metadata["width"].get_uint64 ());
+    uint32_t height = SCAST <uint32_t> (metadata["height"].get_uint64 ());
 
     vkutils::TextureAllocationInfo allocationInfo;
-    allocationInfo.width = SCAST <uint32_t> (width);
-    allocationInfo.height = SCAST <uint32_t> (height);
-    allocationInfo.pixels = RCAST <const char*> (pixels);
+    allocationInfo.compressed = true;
+    allocationInfo.compressedSize = asset.size;
+    allocationInfo.width = width;
+    allocationInfo.height = height;
+    allocationInfo.pixels = asset.data;
 
     vkutils::allocateTexture (
       device,
@@ -178,7 +178,8 @@ void loadModel (
       output.textures[index]
     );
 
-    stbi_image_free (pixels);
+    free (asset.data);
+    free (asset.metadata);
   }
 
   output.materialsCount = SCAST <uint32_t> (gltf.materialsCount);
@@ -419,23 +420,17 @@ void Model::draw (VkCommandBuffer commandBuffer, const glm::mat4& mvp) {
 
   vkCmdPushConstants (commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (glm::mat4), &mvp);
 
-  uint32_t previousMaterial = ~0u;
-
   for (uint32_t index = 0; index < primitivesCount; ++index) {
     const auto& current = primitives[index];
 
-    if (current.materialIndex != previousMaterial) {
-      vkCmdBindDescriptorSets (
-        commandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipelineLayout,
-        0,
-        1, &materials[current.materialIndex].descriptorSet,
-        0, nullptr
-      );
-
-      previousMaterial = current.materialIndex;
-    }
+    vkCmdBindDescriptorSets (
+      commandBuffer,
+      VK_PIPELINE_BIND_POINT_GRAPHICS,
+      pipelineLayout,
+      0,
+      1, &materials[current.materialIndex].descriptorSet,
+      0, nullptr
+    );
 
     vkCmdDrawIndexed (commandBuffer, current.indexCount, 1, current.firstIndex, 0, 0);
   }

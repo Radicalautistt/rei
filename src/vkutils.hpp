@@ -96,8 +96,10 @@ struct Buffer {
 };
 
 struct TextureAllocationInfo {
+  bool compressed;
   uint32_t width, height;
   const char* pixels;
+  size_t compressedSize;
 };
 
 void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices& output);

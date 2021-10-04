@@ -6,6 +6,7 @@
 #include "window.hpp"
 #include "vkutils.hpp"
 
+#include <lz4/lib/lz4.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
 namespace rei::vkutils {
@@ -444,7 +445,18 @@ void allocateTexture (
   allocateStagingBuffer (allocator, size, stagingBuffer);
 
   VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
-  memcpy (stagingBuffer.mapped, allocationInfo.pixels, size);
+
+  if (allocationInfo.compressed) {
+    LZ4_decompress_safe (
+      allocationInfo.pixels,
+      RCAST <char*> (stagingBuffer.mapped),
+      SCAST <int> (allocationInfo.compressedSize),
+      SCAST <int> (size)
+    );
+  } else {
+    memcpy (stagingBuffer.mapped, allocationInfo.pixels, size);
+  }
+
   vmaUnmapMemory (allocator, stagingBuffer.allocation);
 
   {
