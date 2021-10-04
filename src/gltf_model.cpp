@@ -285,7 +285,12 @@ void Model::initDescriptorPool (VkDevice device) {
   VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &descriptorPool));
 }
 
-void Model::initPipelines (VkDevice device, VkRenderPass renderPass, const vkutils::Swapchain& swapchain) {
+void Model::initPipelines (
+  VkDevice device,
+  VkRenderPass renderPass,
+  VkPipelineCache pipelineCache,
+  const vkutils::Swapchain& swapchain) {
+
   {
     VkPushConstantRange pushConstantRange;
     pushConstantRange.offset = 0;
@@ -408,7 +413,7 @@ void Model::initPipelines (VkDevice device, VkRenderPass renderPass, const vkuti
   createInfos[0].colorBlendInfo = &colorBlendInfo;
   createInfos[0].depthStencilInfo = &depthStencilInfo;
 
-  rei::vkutils::createGraphicsPipelines (device, VK_NULL_HANDLE, 1, createInfos, &pipeline);
+  rei::vkutils::createGraphicsPipelines (device, pipelineCache, 1, createInfos, &pipeline);
 }
 
 void Model::draw (VkCommandBuffer commandBuffer, const glm::mat4& mvp) {

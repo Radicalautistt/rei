@@ -110,6 +110,7 @@ extern PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
   X (vkCmdBindPipeline)                         \
   X (vkCmdPipelineBarrier)                      \
   X (vkCreatePipelineCache)                     \
+  X (vkGetPipelineCacheData)                    \
   X (vkDestroyPipelineCache)                    \
   X (vkCreatePipelineLayout)                    \
   X (vkDestroyPipelineLayout)                   \

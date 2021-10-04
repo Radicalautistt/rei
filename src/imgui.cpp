@@ -198,6 +198,8 @@ void create (const ContextCreateInfo& createInfo, Context& output) {
     io.Fonts->GetTexDataAsRGBA32 (&pixels, &width, &height);
 
     vkutils::TextureAllocationInfo allocationInfo;
+    allocationInfo.compressed = false;
+    allocationInfo.compressedSize = 0;
     allocationInfo.width = SCAST <uint32_t> (width);
     allocationInfo.height = SCAST <uint32_t> (height);
     allocationInfo.pixels = RCAST <const char*> (pixels);

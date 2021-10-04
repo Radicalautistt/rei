@@ -67,6 +67,7 @@ int main () {
   VkFramebuffer* framebuffers;
   VkClearValue clearValues[2] {};
 
+  VkPipelineCache pipelineCache;
   VkDescriptorPool mainDescriptorPool;
 
   rei::extra::imgui::Context imguiContext;
@@ -325,13 +326,32 @@ int main () {
     VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &mainDescriptorPool));
   }
 
+  { // Create/load pipeline cache
+    VkPipelineCacheCreateInfo createInfo {PIPELINE_CACHE_CREATE_INFO};
+    rei::utils::File cacheFile;
+    auto result = rei::utils::readFile ("pipeline.cache", true, cacheFile);
+    switch (result) {
+      case rei::Result::Success: {
+	puts ("Reusing pipeline cache...");
+        createInfo.initialDataSize = cacheFile.size;
+	createInfo.pInitialData = cacheFile.contents;
+      } break;
+      default: {
+	puts ("Failed to obtain pipeline cache data, creating one from scratch");
+      } break;
+    }
+
+    VK_CHECK (vkCreatePipelineCache (device, &createInfo, nullptr, &pipelineCache));
+    if (cacheFile.contents) free (cacheFile.contents);
+  }
+
   { // Create imgui context
     rei::extra::imgui::ContextCreateInfo createInfo;
     createInfo.device = device;
     createInfo.window = &window;
     createInfo.allocator = allocator;
     createInfo.renderPass = renderPass;
-    createInfo.pipelineCache = VK_NULL_HANDLE;
+    createInfo.pipelineCache = pipelineCache;
     createInfo.transferContext = &transferContext;
     createInfo.descriptorPool = mainDescriptorPool;
 
@@ -342,7 +362,7 @@ int main () {
 
   sponza.initDescriptorPool (device);
   sponza.initMaterialDescriptors (device);
-  sponza.initPipelines (device, renderPass, swapchain);
+  sponza.initPipelines (device, renderPass, pipelineCache, swapchain);
 
   { // Render loop
     bool running = true;
@@ -465,6 +485,21 @@ int main () {
 
   rei::gltf::destroyModel (device, allocator, sponza);
   rei::extra::imgui::destroy (device, allocator, imguiContext);
+
+  { // Save pipeline cache for future reuse
+    size_t size = 0;
+    VK_CHECK (vkGetPipelineCacheData (device, pipelineCache, &size, nullptr));
+
+    uint8_t* data = MALLOC (uint8_t, size);
+    VK_CHECK (vkGetPipelineCacheData (device, pipelineCache, &size, data));
+
+    FILE* cacheFile = fopen ("pipeline.cache", "wb");
+    fwrite (data, 1, size, cacheFile);
+    fclose (cacheFile);
+
+    free (data);
+    vkDestroyPipelineCache (device, pipelineCache, nullptr);
+  }
 
   vkDestroyDescriptorPool (device, mainDescriptorPool, nullptr);
 

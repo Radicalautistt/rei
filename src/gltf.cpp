@@ -89,7 +89,7 @@ void load (const char* relativePath, Data& output) {
     strcpy (extension, ".bin");
 
     utils::File binaryFile;
-    utils::readFile (binaryPath, "rb", binaryFile);
+    REI_CHECK (utils::readFile (binaryPath, true, binaryFile));
 
     output.buffer = MALLOC (uint8_t, binaryFile.size);
     memcpy (output.buffer, SCAST <uint8_t*> (binaryFile.contents), binaryFile.size);

@@ -49,3 +49,4 @@ utils/compile_shaders
 # Miscellanea
 .ccls
 imgui.ini
+pipeline.cache

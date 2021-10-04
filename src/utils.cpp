@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 
 #include "utils.hpp"
 #include "common.hpp"
@@ -19,9 +18,9 @@ float Timer::getCurrentTime () noexcept {
   return SCAST <float> ((now.tv_sec - start.tv_sec) * 1000 + (now.tv_usec - start.tv_usec) / 1000) / 1000.f;
 }
 
-void readFile (const char* relativePath, const char* flags, File& output) {
-  FILE* file = fopen (relativePath, flags);
-  assert (file);
+Result readFile (const char* relativePath, bool binary, File& output) {
+  FILE* file = fopen (relativePath, binary ? "rb" : "r");
+  if (!file) return Result::FileDoesNotExist;
 
   fseek (file, 0, SEEK_END);
   output.size = ftell (file);
@@ -30,6 +29,8 @@ void readFile (const char* relativePath, const char* flags, File& output) {
   output.contents = malloc (output.size);
   fread (output.contents, 1, output.size, file);
   fclose (file);
+
+  return Result::Success;
 }
 
 }

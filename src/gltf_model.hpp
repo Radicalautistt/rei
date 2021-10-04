@@ -49,7 +49,14 @@ struct Model {
   void initDescriptorPool (VkDevice device);
 
   void initMaterialDescriptors (VkDevice device);
-  void initPipelines (VkDevice device, VkRenderPass renderPass, const vkutils::Swapchain& swapchain);
+
+  void initPipelines (
+    VkDevice device,
+    VkRenderPass renderPass,
+    VkPipelineCache pipelineCache,
+    const vkutils::Swapchain& swapchain
+  );
+
   void draw (VkCommandBuffer commandBuffer, const glm::mat4& mvp);
 };
 

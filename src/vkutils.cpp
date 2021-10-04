@@ -283,7 +283,7 @@ void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain& swapc
 
 void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule& output) {
   utils::File shaderFile;
-  utils::readFile (relativePath, "rb", shaderFile);
+  REI_CHECK (utils::readFile (relativePath, true, shaderFile));
 
   VkShaderModuleCreateInfo createInfo {SHADER_MODULE_CREATE_INFO};
   createInfo.codeSize = shaderFile.size;

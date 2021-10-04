@@ -2,7 +2,10 @@
 #define UTILS_HPP
 
 #include <stddef.h>
+#include <stdint.h>
 #include <sys/time.h>
+
+#include "common.hpp"
 
 #define CLAMP(value, min, max) (((value) > (max)) ? (max) : (((value) < (min)) ? (min) : (value)))
 
@@ -20,7 +23,7 @@ struct Timer {
   [[nodiscard]] static float getCurrentTime () noexcept;
 };
 
-void readFile (const char* relativePath, const char* flags, File& output);
+[[nodiscard]] Result readFile (const char* relativePath, bool binary, File& output);
 
 }
 
