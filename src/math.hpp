@@ -46,17 +46,17 @@ namespace simd::m128 {
   // want our register to have. E.g. _MM_SHUFFLE (3, 0, 2, 1)
   // used with _mm_shuffle_ps returns a register
   // of form (w, x, z, y) (in this case w is ingnored since we are operating on 3d vectors),
-  // just like the first row of the formula.
+  // just like the first column of the formula (in reverse order).
   const int leftMask = _MM_SHUFFLE (3, 0, 2, 1);
   const int rightMask = _MM_SHUFFLE (3, 1, 0, 2);
 
-  __m128 rows[4];
-  rows[0] = _mm_shuffle_ps (a, a, leftMask);
-  rows[1] = _mm_shuffle_ps (b, b, rightMask);
-  rows[2] = _mm_shuffle_ps (a, a, rightMask);
-  rows[3] = _mm_shuffle_ps (b, b, leftMask);
+  __m128 columns[4];
+  columns[0] = _mm_shuffle_ps (a, a, leftMask);
+  columns[1] = _mm_shuffle_ps (b, b, rightMask);
+  columns[2] = _mm_shuffle_ps (a, a, rightMask);
+  columns[3] = _mm_shuffle_ps (b, b, leftMask);
 
-  return _mm_sub_ps (_mm_mul_ps (rows[0], rows[2]), _mm_mul_ps (rows[1], rows[3]));
+  return _mm_sub_ps (_mm_mul_ps (columns[0], columns[2]), _mm_mul_ps (columns[1], columns[3]));
 }
 
 }
@@ -105,6 +105,14 @@ struct alignas (16) Vector3 {
   }
 };
 
+struct Vector4 {
+  float x, y, z, w;
+};
+
+struct Matrix4 {
+  Vector4 rows[4];
+};
+
 inline Vector3 operator + (const Vector3& a, const Vector3& b) noexcept {
   Vector3 result;
   _mm_store_ps (&result.x, _mm_add_ps (a.load (), b.load ()));
@@ -119,6 +127,53 @@ inline Vector3 operator * (const Vector3& a, const Vector3& b) noexcept {
 
 [[nodiscard]] constexpr inline float radians (float degrees) noexcept {
   return degrees * PI_BY_180;
+}
+
+void lookAt (
+  const Vector3& eye,
+  const Vector3& center,
+  const Vector3& up,
+  Matrix4& output) noexcept {
+
+  using namespace simd;
+  auto eyeM128 = eye.load ();
+  auto z = m128::normalize (_mm_sub_ps (center.load (), eyeM128));
+  auto x = m128::normalize (m128::crossProduct (z, up.load ()));
+  auto y = m128::crossProduct (x, z);
+
+  float dotXEye = _mm_cvtss_f32 (m128::dotProduct (x, eyeM128));
+  float dotYEye = _mm_cvtss_f32 (m128::dotProduct (y, eyeM128));
+  float dotZEye = _mm_cvtss_f32 (m128::dotProduct (z, eyeM128));
+
+  struct {
+    Vector3 x, y, z;
+  } result;
+
+  z = m128::negate (z);
+
+  _mm_store_ps (&result.x.x, x);
+  _mm_store_ps (&result.y.x, y);
+  _mm_store_ps (&result.z.x, z);
+
+  output.rows[0].x = result.x.x;
+  output.rows[0].y = result.y.x;
+  output.rows[0].z = result.z.x;
+  output.rows[0].w = 0.f;
+
+  output.rows[1].x = result.x.y;
+  output.rows[1].y = result.y.y;
+  output.rows[1].z = result.z.y;
+  output.rows[1].w = 0.f;
+
+  output.rows[2].x = result.x.z;
+  output.rows[2].y = result.y.z;
+  output.rows[2].z = result.z.z;
+  output.rows[2].w = 0.f;
+
+  output.rows[3].x = -dotXEye;
+  output.rows[3].y = -dotYEye;
+  output.rows[3].z = dotZEye;
+  output.rows[3].w = 1.f;
 }
 
 }
