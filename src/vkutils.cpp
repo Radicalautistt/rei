@@ -1,3 +1,4 @@
+#include <math.h>
 #include <string.h>
 #include <assert.h>
 
@@ -440,6 +441,9 @@ void allocateTexture (
 
   VkExtent3D extent {allocationInfo.width, allocationInfo.height, 1};
   VkDeviceSize size = SCAST <VkDeviceSize> (extent.width * extent.height * 4);
+  uint32_t mipLevels = !allocationInfo.generateMipmaps ? 1 :
+    SCAST <uint32_t>
+    (floorf (log2f (SCAST <float> (MAX (extent.width, extent.height))))) + 1;
 
   Buffer stagingBuffer;
   allocateStagingBuffer (allocator, size, stagingBuffer);
@@ -461,15 +465,16 @@ void allocateTexture (
 
   {
     VkImageCreateInfo createInfo {IMAGE_CREATE_INFO};
-    createInfo.mipLevels = 1;
-    createInfo.arrayLayers = 1;
     createInfo.extent = extent;
+    createInfo.arrayLayers = 1;
+    createInfo.mipLevels = mipLevels;
     createInfo.format = output.format;
     createInfo.imageType = VK_IMAGE_TYPE_2D;
     createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
     createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    createInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     createInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     VmaAllocationCreateInfo vmaAllocationInfo {};
@@ -487,10 +492,10 @@ void allocateTexture (
   }
 
   VkImageSubresourceRange subresourceRange;
-  subresourceRange.levelCount = 1;
   subresourceRange.layerCount = 1;
   subresourceRange.baseMipLevel = 0;
   subresourceRange.baseArrayLayer = 0;
+  subresourceRange.levelCount = mipLevels;
   subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
   {
@@ -506,7 +511,7 @@ void allocateTexture (
 
     vkCmdPipelineBarrier (
       commandBuffer,
-      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      VK_PIPELINE_STAGE_TRANSFER_BIT,
       VK_PIPELINE_STAGE_TRANSFER_BIT,
       VULKAN_NO_FLAGS,
       0, nullptr,
@@ -533,10 +538,124 @@ void allocateTexture (
       1, &copyRegion
     );
 
+    VkAccessFlags destinationAccessMask =
+      allocationInfo.generateMipmaps ?
+      VK_ACCESS_MEMORY_READ_BIT :
+      VK_ACCESS_SHADER_READ_BIT;
+
+    VkImageLayout newLayout =
+      allocationInfo.generateMipmaps ?
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL :
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkPipelineStageFlags destinationStage =
+      allocationInfo.generateMipmaps ?
+      VK_PIPELINE_STAGE_TRANSFER_BIT :
+      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
     auto& readBarrier = transferBarrier;
-    readBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    readBarrier.dstAccessMask = destinationAccessMask;
     readBarrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
     readBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    readBarrier.newLayout = newLayout;
+
+    vkCmdPipelineBarrier (
+      commandBuffer,
+      VK_PIPELINE_STAGE_TRANSFER_BIT,
+      destinationStage,
+      VULKAN_NO_FLAGS,
+      0, nullptr,
+      0, nullptr,
+      1, &readBarrier
+    );
+
+    submitImmediateCommand (device, transferContext, commandBuffer);
+  }
+
+  vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
+
+  if (allocationInfo.generateMipmaps) {
+    auto commandBuffer = startImmediateCommand (device, transferContext.commandPool);
+
+    for (uint32_t mipLevel = 1; mipLevel < mipLevels; ++mipLevel) {
+      subresourceRange.levelCount = 1;
+      subresourceRange.baseMipLevel = mipLevel;
+
+      VkImageMemoryBarrier blitDestination {IMAGE_MEMORY_BARRIER};
+      blitDestination.image = output.handle;
+      blitDestination.srcAccessMask = VULKAN_NO_FLAGS;
+      blitDestination.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+      blitDestination.subresourceRange = subresourceRange;
+      blitDestination.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      blitDestination.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+      vkCmdPipelineBarrier (
+        commandBuffer,
+	VK_PIPELINE_STAGE_TRANSFER_BIT,
+	VK_PIPELINE_STAGE_TRANSFER_BIT,
+	VULKAN_NO_FLAGS,
+	0, nullptr,
+	0, nullptr,
+	1, &blitDestination
+      );
+
+      VkImageBlit imageBlit;
+      imageBlit.srcSubresource.layerCount = 1;
+      imageBlit.srcSubresource.baseArrayLayer = 0;
+      imageBlit.srcSubresource.mipLevel = mipLevel - 1;
+      imageBlit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+      imageBlit.srcOffsets[0] = {0, 0, 0};
+      imageBlit.srcOffsets[1].x = SCAST <int32_t> (extent.width >> (mipLevel - 1));
+      imageBlit.srcOffsets[1].y = SCAST <int32_t> (extent.height >> (mipLevel - 1));
+      imageBlit.srcOffsets[1].z = 1;
+
+      imageBlit.dstSubresource.layerCount = 1;
+      imageBlit.dstSubresource.baseArrayLayer = 0;
+      imageBlit.dstSubresource.mipLevel = mipLevel;
+      imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+      imageBlit.dstOffsets[0] = {0, 0, 0};
+      imageBlit.dstOffsets[1].x = SCAST <int32_t> (extent.width >> mipLevel);
+      imageBlit.dstOffsets[1].y = SCAST <int32_t> (extent.height >> mipLevel);
+      imageBlit.dstOffsets[1].z = 1;
+
+      vkCmdBlitImage (
+        commandBuffer,
+	output.handle,
+	VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+	output.handle,
+	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+	1, &imageBlit,
+	VK_FILTER_LINEAR
+      );
+
+      auto& blitSource = blitDestination;
+      blitSource.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+      blitSource.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+      blitSource.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+      blitSource.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+      vkCmdPipelineBarrier (
+        commandBuffer,
+	VK_PIPELINE_STAGE_TRANSFER_BIT,
+	VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VULKAN_NO_FLAGS,
+	0, nullptr,
+	0, nullptr,
+	1, &blitSource
+      );
+    }
+
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = mipLevels;
+
+    VkImageMemoryBarrier readBarrier {IMAGE_MEMORY_BARRIER};
+    readBarrier.image = output.handle;
+    readBarrier.subresourceRange = subresourceRange;
+    readBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    readBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    readBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     readBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     vkCmdPipelineBarrier (
@@ -551,8 +670,6 @@ void allocateTexture (
 
     submitImmediateCommand (device, transferContext, commandBuffer);
   }
-
-  vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
 
   VkImageViewCreateInfo createInfo {IMAGE_VIEW_CREATE_INFO};
   createInfo.image = output.handle;

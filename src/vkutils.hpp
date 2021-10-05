@@ -96,7 +96,7 @@ struct Buffer {
 };
 
 struct TextureAllocationInfo {
-  bool compressed;
+  bool compressed, generateMipmaps;
   uint32_t width, height;
   const char* pixels;
   size_t compressedSize;

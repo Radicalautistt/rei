@@ -36,6 +36,7 @@ extern PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
   X (vkEnumerateDeviceExtensionProperties)      \
                                                 \
   X (vkGetPhysicalDeviceFeatures)               \
+  X (vkGetPhysicalDeviceFormatProperties)       \
   X (vkGetPhysicalDeviceProperties)             \
   X (vkGetPhysicalDeviceMemoryProperties)       \
   X (vkGetPhysicalDeviceSurfaceSupportKHR)      \
@@ -62,6 +63,7 @@ extern PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
   X (vkAcquireNextImageKHR)                     \
                                                 \
   X (vkCreateImage)                             \
+  X (vkCmdBlitImage)                            \
   X (vkDestroyImage)                            \
   X (vkCreateImageView)                         \
   X (vkDestroyImageView)                        \

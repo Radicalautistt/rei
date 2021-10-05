@@ -200,6 +200,7 @@ void create (const ContextCreateInfo& createInfo, Context& output) {
     vkutils::TextureAllocationInfo allocationInfo;
     allocationInfo.compressed = false;
     allocationInfo.compressedSize = 0;
+    allocationInfo.generateMipmaps = false;
     allocationInfo.width = SCAST <uint32_t> (width);
     allocationInfo.height = SCAST <uint32_t> (height);
     allocationInfo.pixels = RCAST <const char*> (pixels);

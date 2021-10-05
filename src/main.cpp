@@ -134,6 +134,16 @@ int main () {
     rei::vkutils::QueueFamilyIndices indices;
     rei::vkutils::choosePhysicalDevice (instance, windowSurface, indices, physicalDevice);
 
+    {
+      VkFormatProperties formatProperties;
+      vkGetPhysicalDeviceFormatProperties (physicalDevice, VK_FORMAT_R8G8B8A8_SRGB, &formatProperties);
+
+      VkFormatFeatureFlags requiredFlags = VK_FORMAT_FEATURE_BLIT_SRC_BIT;
+      requiredFlags |= VK_FORMAT_FEATURE_BLIT_DST_BIT;
+
+      assert (formatProperties.optimalTilingFeatures & requiredFlags);
+    }
+
     VkPhysicalDeviceFeatures enabledFeatures {};
 
     float queuePriority = 1.f;

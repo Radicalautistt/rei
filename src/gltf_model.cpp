@@ -164,11 +164,12 @@ void loadModel (
     uint32_t height = SCAST <uint32_t> (metadata["height"].get_uint64 ());
 
     vkutils::TextureAllocationInfo allocationInfo;
-    allocationInfo.compressed = true;
-    allocationInfo.compressedSize = asset.size;
     allocationInfo.width = width;
     allocationInfo.height = height;
+    allocationInfo.compressed = true;
     allocationInfo.pixels = asset.data;
+    allocationInfo.generateMipmaps = true;
+    allocationInfo.compressedSize = asset.size;
 
     vkutils::allocateTexture (
       device,
@@ -251,6 +252,7 @@ void Model::initMaterialDescriptors (VkDevice device) {
       VkSamplerCreateInfo createInfo {SAMPLER_CREATE_INFO};
       createInfo.minFilter = VK_FILTER_LINEAR;
       createInfo.magFilter = VK_FILTER_LINEAR;
+      createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
       createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
       createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
       createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
