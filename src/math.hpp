@@ -215,6 +215,37 @@ struct Matrix4 {
   }
 };
 
+inline Matrix4 operator * (const Matrix4& a, const Matrix4& b) noexcept {
+  Matrix4 result;
+  __m128 aRows[4];
+  aRows[0] = a[0].load ();
+  aRows[1] = a[1].load ();
+  aRows[2] = a[2].load ();
+  aRows[3] = a[3].load ();
+
+  for (uint8_t index = 0; index < 4; ++index) {
+    auto left = _mm_add_ps (
+      _mm_mul_ps (aRows[0], _mm_set1_ps (b[index].x)),
+      _mm_mul_ps (aRows[1], _mm_set1_ps (b[index].y))
+    );
+
+    auto right = _mm_add_ps (
+      _mm_mul_ps (aRows[2], _mm_set1_ps (b[index].z)),
+      _mm_mul_ps (aRows[3], _mm_set1_ps (b[index].w))
+    );
+
+    _mm_store_ps (&result[index].x, _mm_add_ps (left, right));
+  }
+
+  // NOTE For my future self: the simd code above is basicaly this nice and clean scalar piece
+  // result[0] = a[0] * b[0].x + a[1] * b[0].y + a[2] * b[0].z + a[3] * b[0].w;
+  // result[1] = a[0] * b[1].x + a[1] * b[1].y + a[2] * b[1].z + a[3] * b[1].w;
+  // result[2] = a[0] * b[2].x + a[1] * b[2].y + a[2] * b[2].z + a[3] * b[2].w;
+  // result[3] = a[0] * b[3].x + a[1] * b[3].y + a[2] * b[3].z + a[3] * b[3].w;
+
+  return result;
+}
+
 void lookAt (
   const Vector3& eye,
   const Vector3& center,
