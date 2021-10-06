@@ -5,7 +5,9 @@
 
 #include "vkutils.hpp"
 
-#include <glm/mat4x4.hpp>
+namespace rei::math {
+struct Matrix4;
+}
 
 namespace rei::gltf {
 
@@ -57,7 +59,7 @@ struct Model {
     const vkutils::Swapchain& swapchain
   );
 
-  void draw (VkCommandBuffer commandBuffer, const glm::mat4& mvp);
+  void draw (VkCommandBuffer commandBuffer, const math::Matrix4& mvp);
 };
 
 void loadModel (

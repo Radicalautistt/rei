@@ -5,15 +5,22 @@
 #include <stdint.h>
 #include <immintrin.h>
 
-#define PI 3.14159265359f
-// PI / 180. Used for to convert degrees to radians
-#define PI_BY_180 0.01745329251994329576923690768489f
+#ifndef PI
+#  define PI 3.14159265359f
+#endif
 
+#ifndef PI_BY_180
+// PI / 180. Used for to convert degrees to radians
+#  define PI_BY_180 0.01745329251994329576923690768489f
+#endif
+
+#ifndef GET_RESULT
 // Load values from a simd register into a vector of a given type
-#define GET_RESULT(VectorType, simdRegister) \
-  VectorType result;                         \
-  _mm_store_ps (&result.x, simdRegister);    \
-  return result
+#  define GET_RESULT(VectorType, simdRegister) \
+    VectorType result;                         \
+    _mm_store_ps (&result.x, simdRegister);    \
+    return result
+#endif
 
 namespace rei::math {
 
@@ -71,6 +78,14 @@ namespace simd::m128 {
 
 }
 
+struct Vector2 {
+  float x, y;
+
+  Vector2 () = default;
+  constexpr Vector2 (float x, float y) : x {x}, y {y} {}
+  constexpr Vector2 (float scalar) : x {scalar}, y {scalar} {}
+};
+
 struct alignas (16) Vector3 {
   float x, y, z;
 
@@ -99,6 +114,11 @@ struct alignas (16) Vector3 {
 
   inline Vector3& operator *= (const Vector3& other) noexcept {
     _mm_store_ps (&this->x, _mm_mul_ps (this->load (), other.load ()));
+    return *this;
+  }
+
+  inline Vector3& operator -= (const Vector3& other) noexcept {
+    _mm_store_ps (&this->x, _mm_sub_ps (this->load (), other.load ()));
     return *this;
   }
 
@@ -237,7 +257,7 @@ inline Matrix4 operator * (const Matrix4& a, const Matrix4& b) noexcept {
     _mm_store_ps (&result[index].x, _mm_add_ps (left, right));
   }
 
-  // NOTE For my future self: the simd code above is basicaly this nice and clean scalar piece
+  // NOTE For my future self: the simd code above is basically this nice and clean scalar piece
   // result[0] = a[0] * b[0].x + a[1] * b[0].y + a[2] * b[0].z + a[3] * b[0].w;
   // result[1] = a[0] * b[1].x + a[1] * b[1].y + a[2] * b[1].z + a[3] * b[1].w;
   // result[2] = a[0] * b[2].x + a[1] * b[2].y + a[2] * b[2].z + a[3] * b[2].w;
@@ -250,48 +270,16 @@ void lookAt (
   const Vector3& eye,
   const Vector3& center,
   const Vector3& up,
-  Matrix4& output) noexcept {
+  Matrix4& output
+) noexcept;
 
-  using namespace simd;
-  auto eyeM128 = eye.load ();
-  auto z = m128::normalize (_mm_sub_ps (center.load (), eyeM128));
-  auto x = m128::normalize (m128::crossProduct (z, up.load ()));
-  auto y = m128::crossProduct (x, z);
-
-  float dotXEye = _mm_cvtss_f32 (m128::dotProduct (x, eyeM128));
-  float dotYEye = _mm_cvtss_f32 (m128::dotProduct (y, eyeM128));
-  float dotZEye = _mm_cvtss_f32 (m128::dotProduct (z, eyeM128));
-
-  struct {
-    Vector3 x, y, z;
-  } result;
-
-  z = m128::negate (z);
-
-  _mm_store_ps (&result.x.x, x);
-  _mm_store_ps (&result.y.x, y);
-  _mm_store_ps (&result.z.x, z);
-
-  output.rows[0].x = result.x.x;
-  output.rows[0].y = result.y.x;
-  output.rows[0].z = result.z.x;
-  output.rows[0].w = 0.f;
-
-  output.rows[1].x = result.x.y;
-  output.rows[1].y = result.y.y;
-  output.rows[1].z = result.z.y;
-  output.rows[1].w = 0.f;
-
-  output.rows[2].x = result.x.z;
-  output.rows[2].y = result.y.z;
-  output.rows[2].z = result.z.z;
-  output.rows[2].w = 0.f;
-
-  output.rows[3].x = -dotXEye;
-  output.rows[3].y = -dotYEye;
-  output.rows[3].z = dotZEye;
-  output.rows[3].w = 1.f;
-}
+void perspective (
+  float verticalFOV,
+  float aspectRatio,
+  float zNear,
+  float zFar,
+  Matrix4& output
+) noexcept;
 
 }
 

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#include "math.hpp"
 #include "gltf.hpp"
 #include "common.hpp"
 #include "gltf_model.hpp"
@@ -296,7 +297,7 @@ void Model::initPipelines (
   {
     VkPushConstantRange pushConstantRange;
     pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof (glm::mat4);
+    pushConstantRange.size = sizeof (math::Matrix4);
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkPipelineLayoutCreateInfo createInfo {PIPELINE_LAYOUT_CREATE_INFO};
@@ -418,14 +419,14 @@ void Model::initPipelines (
   rei::vkutils::createGraphicsPipelines (device, pipelineCache, 1, createInfos, &pipeline);
 }
 
-void Model::draw (VkCommandBuffer commandBuffer, const glm::mat4& mvp) {
+void Model::draw (VkCommandBuffer commandBuffer, const math::Matrix4& mvp) {
   vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
   VkDeviceSize offset = 0;
   vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffer.handle, &offset);
   vkCmdBindIndexBuffer (commandBuffer, indexBuffer.handle, 0, VK_INDEX_TYPE_UINT32);
 
-  vkCmdPushConstants (commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (glm::mat4), &mvp);
+  vkCmdPushConstants (commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Matrix4), &mvp);
 
   for (uint32_t index = 0; index < primitivesCount; ++index) {
     const auto& current = primitives[index];

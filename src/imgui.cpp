@@ -1,8 +1,8 @@
+#include "math.hpp"
 #include "imgui.hpp"
 #include "common.hpp"
 #include "window.hpp"
 
-#include <glm/vec2.hpp>
 #include <imgui/imgui.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
@@ -125,9 +125,9 @@ void Context::renderDrawData (const ImDrawData* drawData, VkCommandBuffer comman
 
     vkCmdSetViewport (commandBuffer, 0, 1, &viewport);
 
-    glm::vec2 pushConstants[2];
-    pushConstants[1] = glm::vec2 {-1.f};
-    pushConstants[0] = glm::vec2 {2.f / 1680.f, 2.f / 1050.f};
+    math::Vector2 pushConstants[2];
+    pushConstants[1] = math::Vector2 {-1.f};
+    pushConstants[0] = math::Vector2 {2.f / 1680.f, 2.f / 1050.f};
 
     vkCmdPushConstants (
       commandBuffer,
@@ -274,7 +274,7 @@ void create (const ContextCreateInfo& createInfo, Context& output) {
   {
     VkPushConstantRange pushConstantRange;
     pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof (glm::vec2) * 2;
+    pushConstantRange.size = sizeof (math::Vector2) * 2;
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkPipelineLayoutCreateInfo createInfo {PIPELINE_LAYOUT_CREATE_INFO};

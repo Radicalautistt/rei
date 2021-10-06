@@ -12,9 +12,7 @@
 #include "gltf_model.hpp"
 
 #include <xcb/xcb.h>
-#include <glm/glm.hpp>
 #include <imgui/imgui.h>
-#include <glm/gtc/matrix_transform.hpp>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
 #define FRAMES_COUNT 2u
@@ -44,8 +42,7 @@ constexpr uint16_t quadIndices[6] {0, 1, 3, 1, 2, 3};
 
 int main () {
   rei::extra::xcb::Window window;
-
-  rei::Camera camera {glm::vec3 {0.f, 1.f, 0.f}, glm::vec3 {0.f, 100.f, -10.f}, -90.f, 0.f};
+  rei::Camera camera {{0.f, 1.f, 0.f}, {0.f, 100.f, -10.f}, -90.f, 0.f};
 
   VkInstance instance;
   #ifndef NDEBUG
@@ -76,7 +73,8 @@ int main () {
 
   rei::gltf::Model sponza;
 
-  glm::mat4 modelMatrix = glm::translate (glm::mat4 {1.f}, glm::vec3 {0.f, 0.f, 1.f});
+  rei::math::Matrix4 modelMatrix {1.f};
+  rei::math::Matrix4::translate (modelMatrix, {0.f, 0.f, 1.f});
 
   rei::utils::Timer::init ();
   VulkanContext::init ();
@@ -446,7 +444,10 @@ int main () {
 	vkCmdBeginRenderPass (currentFrame.commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
       }
 
-      glm::mat4 mvp = camera.projection * glm::lookAt (camera.position, camera.position + camera.front, camera.up) * modelMatrix;
+      rei::math::Matrix4 viewMatrix;
+      rei::math::lookAt (camera.position, camera.position + camera.front, camera.up, viewMatrix);
+
+      rei::math::Matrix4 mvp = camera.projection * viewMatrix * modelMatrix;
       sponza.draw (currentFrame.commandBuffer, mvp);
 
       imguiContext.newFrame ();

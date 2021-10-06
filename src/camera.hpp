@@ -1,8 +1,7 @@
 #ifndef CAMERA_HPP
 #define CAMERA_HPP
 
-#include <glm/vec4.hpp>
-#include <glm/mat4x4.hpp>
+#include "math.hpp"
 
 namespace rei {
 
@@ -18,14 +17,14 @@ struct Camera {
   float zoom, speed, sensitivity;
   float zFar, yaw, pitch, lastX, lastY;
 
-  glm::vec3 up, front, right, worldUp, position;
-  glm::mat4 projection;
+  math::Vector3 up, front, right, worldUp, position;
+  math::Matrix4 projection;
 
   void update () noexcept;
   void handleMouseMovement (float x, float y) noexcept;
   void move (Direction direction, float deltaTime) noexcept;
 
-  Camera (const glm::vec3& up, const glm::vec3& position, float yaw, float pitch);
+  Camera (const math::Vector3& up, const math::Vector3& position, float yaw, float pitch);
 };
 
 };
