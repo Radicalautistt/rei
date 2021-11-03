@@ -6,7 +6,7 @@
 struct xcb_screen_t;
 struct xcb_connection_t;
 
-namespace rei::extra::xcb {
+namespace rei::xcb {
 
 struct WindowCreateInfo {
   int16_t x, y;

@@ -1,6 +1,6 @@
 #include "vkcommon.hpp"
 
-namespace rei::vkcommon {
+namespace rei::vkc {
 
 const char* getError (VkResult error) noexcept {
   #define GET_ERROR(name) case VK_##name: return #name

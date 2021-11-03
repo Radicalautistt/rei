@@ -4,11 +4,11 @@
 #include "vk.hpp"
 #include "vkcommon.hpp"
 
-namespace rei::vkinit {
+namespace rei::vki {
 
 [[nodiscard]] constexpr inline auto debugMessengerInfo () noexcept {
   VkDebugUtilsMessengerCreateInfoEXT createInfo {DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
-  createInfo.pfnUserCallback = vkcommon::debugCallback;
+  createInfo.pfnUserCallback = vkc::debugCallback;
   createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
   createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
   createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;

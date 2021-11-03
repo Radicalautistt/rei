@@ -9,11 +9,11 @@ struct VmaAllocation_T;
 typedef VmaAllocator_T* VmaAllocator;
 typedef VmaAllocation_T* VmaAllocation;
 
-namespace rei::extra::xcb {
+namespace rei::xcb {
 struct Window;
 }
 
-namespace rei::vkutils {
+namespace rei::vku {
 
 struct QueueFamilyIndices {
   bool haveGraphics, havePresent, haveTransfer, haveCompute;
@@ -31,7 +31,7 @@ struct Image {
 struct SwapchainCreateInfo {
   VkDevice device;
   VmaAllocator allocator;
-  extra::xcb::Window* window;
+  xcb::Window* window;
   VkSurfaceKHR windowSurface;
   VkSwapchainKHR oldSwapchain;
   VkPhysicalDevice physicalDevice;

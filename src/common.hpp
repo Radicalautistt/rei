@@ -4,6 +4,7 @@
 #include <alloca.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <x86intrin.h>
 
 #define SCAST static_cast
 #define RCAST reinterpret_cast
@@ -38,6 +39,14 @@
        }                                    \
      } while (false)
 #  endif
+#endif
+
+#ifndef COUNT_CYCLES
+#  define COUNT_CYCLES(routine) do {                                             \
+     uint64_t start = __rdtsc ();                                                \
+     routine;                                                                    \
+     printf ("%s took %llu cycles to comptute\n", #routine, __rdtsc () - start); \
+   } while (0)
 #endif
 
 namespace rei {

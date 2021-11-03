@@ -6,7 +6,7 @@
 #include "common.hpp"
 #include "window.hpp"
 
-namespace rei::extra::xcb {
+namespace rei::xcb {
 
 void Window::getMousePosition (float* output) {
   auto result = xcb_query_pointer_unchecked (connection, handle);

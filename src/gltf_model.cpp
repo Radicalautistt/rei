@@ -16,7 +16,7 @@ namespace rei::gltf {
 void loadModel (
   VkDevice device,
   VmaAllocator allocator,
-  const vkutils::TransferContext& transferContext,
+  const vku::TransferContext& transferContext,
   const char* relativePath,
   Model& output) {
 
@@ -88,59 +88,59 @@ void loadModel (
   #undef GET_ACCESSOR
 
   {
-    vkutils::Buffer stagingBuffer;
+    vku::Buffer stagingBuffer;
     VkDeviceSize vertexBufferSize = sizeof (Vertex) * vertexCount;
-    vkutils::allocateStagingBuffer (allocator, vertexBufferSize, stagingBuffer);
+    vku::allocateStagingBuffer (allocator, vertexBufferSize, stagingBuffer);
 
     VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
     memcpy (stagingBuffer.mapped, vertices, vertexBufferSize);
     vmaUnmapMemory (allocator, stagingBuffer.allocation);
 
     {
-      vkutils::BufferAllocationInfo allocationInfo;
+      vku::BufferAllocationInfo allocationInfo;
       allocationInfo.size = vertexBufferSize;
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
       allocationInfo.bufferUsage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
       allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
       allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-      vkutils::allocateBuffer (allocator, allocationInfo, output.vertexBuffer);
+      vku::allocateBuffer (allocator, allocationInfo, output.vertexBuffer);
     }
 
-    vkutils::copyBuffer (device, transferContext, stagingBuffer, output.vertexBuffer);
+    vku::copyBuffer (device, transferContext, stagingBuffer, output.vertexBuffer);
     vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
   }
 
   free (vertices);
 
   {
-    vkutils::Buffer stagingBuffer;
+    vku::Buffer stagingBuffer;
     VkDeviceSize indexBufferSize = sizeof (uint32_t) * indexCount;
-    vkutils::allocateStagingBuffer (allocator, indexBufferSize, stagingBuffer);
+    vku::allocateStagingBuffer (allocator, indexBufferSize, stagingBuffer);
 
     VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
     memcpy (stagingBuffer.mapped, indices, indexBufferSize);
     vmaUnmapMemory (allocator, stagingBuffer.allocation);
 
     {
-      vkutils::BufferAllocationInfo allocationInfo;
+      vku::BufferAllocationInfo allocationInfo;
       allocationInfo.size = indexBufferSize;
       allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
       allocationInfo.bufferUsage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
       allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-      vkutils::allocateBuffer (allocator, allocationInfo, output.indexBuffer);
+      vku::allocateBuffer (allocator, allocationInfo, output.indexBuffer);
     }
 
-    vkutils::copyBuffer (device, transferContext, stagingBuffer, output.indexBuffer);
+    vku::copyBuffer (device, transferContext, stagingBuffer, output.indexBuffer);
     vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
   }
 
   free (indices);
 
   output.texturesCount = SCAST <uint32_t> (gltf.imagesCount);
-  output.textures = MALLOC (vkutils::Image, gltf.imagesCount);
+  output.textures = MALLOC (vku::Image, gltf.imagesCount);
 
   simdjson::ondemand::parser parser;
 
@@ -164,7 +164,7 @@ void loadModel (
     uint32_t width = SCAST <uint32_t> (metadata["width"].get_uint64 ());
     uint32_t height = SCAST <uint32_t> (metadata["height"].get_uint64 ());
 
-    vkutils::TextureAllocationInfo allocationInfo;
+    vku::TextureAllocationInfo allocationInfo;
     allocationInfo.width = width;
     allocationInfo.height = height;
     allocationInfo.compressed = true;
@@ -172,7 +172,7 @@ void loadModel (
     allocationInfo.generateMipmaps = true;
     allocationInfo.compressedSize = asset.size;
 
-    vkutils::allocateTexture (
+    vku::allocateTexture (
       device,
       allocator,
       allocationInfo,
@@ -292,7 +292,7 @@ void Model::initPipelines (
   VkDevice device,
   VkRenderPass renderPass,
   VkPipelineCache pipelineCache,
-  const vkutils::Swapchain& swapchain) {
+  const vku::Swapchain& swapchain) {
 
   {
     VkPushConstantRange pushConstantRange;
@@ -310,7 +310,7 @@ void Model::initPipelines (
     VK_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &pipelineLayout));
   }
 
-  vkutils::GraphicsPipelineCreateInfo createInfos[1];
+  vku::GraphicsPipelineCreateInfo createInfos[1];
 
   VkVertexInputBindingDescription binding;
   binding.binding = 0;
@@ -416,7 +416,7 @@ void Model::initPipelines (
   createInfos[0].colorBlendInfo = &colorBlendInfo;
   createInfos[0].depthStencilInfo = &depthStencilInfo;
 
-  rei::vkutils::createGraphicsPipelines (device, pipelineCache, 1, createInfos, &pipeline);
+  rei::vku::createGraphicsPipelines (device, pipelineCache, 1, createInfos, &pipeline);
 }
 
 void Model::draw (VkCommandBuffer commandBuffer, const math::Matrix4& mvp) {

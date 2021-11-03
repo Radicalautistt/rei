@@ -42,11 +42,11 @@ struct Model {
   Primitive* primitives;
   uint32_t primitivesCount;
 
-  vkutils::Image* textures;
+  vku::Image* textures;
   uint32_t texturesCount;
 
-  vkutils::Buffer vertexBuffer;
-  vkutils::Buffer indexBuffer;
+  vku::Buffer vertexBuffer;
+  vku::Buffer indexBuffer;
 
   void initDescriptorPool (VkDevice device);
 
@@ -56,7 +56,7 @@ struct Model {
     VkDevice device,
     VkRenderPass renderPass,
     VkPipelineCache pipelineCache,
-    const vkutils::Swapchain& swapchain
+    const vku::Swapchain& swapchain
   );
 
   void draw (VkCommandBuffer commandBuffer, const math::Matrix4& mvp);
@@ -65,7 +65,7 @@ struct Model {
 void loadModel (
   VkDevice device,
   VmaAllocator allocator,
-  const vkutils::TransferContext& transferContext,
+  const vku::TransferContext& transferContext,
   const char* relativePath,
   Model& output
 );

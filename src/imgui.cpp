@@ -6,7 +6,7 @@
 #include <imgui/imgui.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
-namespace rei::extra::imgui {
+namespace rei::imgui {
 
 static bool mouseButtonsDown[2];
 
@@ -24,7 +24,7 @@ void Context::updateBuffers (const ImDrawData* drawData) {
         vmaDestroyBuffer (allocator, vertexBuffer.handle, vertexBuffer.allocation);
       }
 
-      vkutils::BufferAllocationInfo allocationInfo;
+      vku::BufferAllocationInfo allocationInfo;
       allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
       allocationInfo.size = sizeof (ImDrawVert) * counts.vertex;
       allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -32,7 +32,7 @@ void Context::updateBuffers (const ImDrawData* drawData) {
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
       allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-      vkutils::allocateBuffer (allocator, allocationInfo, vertexBuffer);
+      vku::allocateBuffer (allocator, allocationInfo, vertexBuffer);
       VK_CHECK (vmaMapMemory (allocator, vertexBuffer.allocation, &vertexBuffer.mapped));
     }
 
@@ -42,7 +42,7 @@ void Context::updateBuffers (const ImDrawData* drawData) {
         vmaDestroyBuffer (allocator, indexBuffer.handle, indexBuffer.allocation);
       }
 
-      vkutils::BufferAllocationInfo allocationInfo;
+      vku::BufferAllocationInfo allocationInfo;
       allocationInfo.size = sizeof (ImDrawIdx) * counts.index;
       allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
       allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -50,7 +50,7 @@ void Context::updateBuffers (const ImDrawData* drawData) {
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
       allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-      vkutils::allocateBuffer (allocator, allocationInfo, indexBuffer);
+      vku::allocateBuffer (allocator, allocationInfo, indexBuffer);
       VK_CHECK (vmaMapMemory (allocator, indexBuffer.allocation, &indexBuffer.mapped));
     }
 
@@ -197,7 +197,7 @@ void create (const ContextCreateInfo& createInfo, Context& output) {
     ImGuiIO& io = ImGui::GetIO ();
     io.Fonts->GetTexDataAsRGBA32 (&pixels, &width, &height);
 
-    vkutils::TextureAllocationInfo allocationInfo;
+    vku::TextureAllocationInfo allocationInfo;
     allocationInfo.compressed = false;
     allocationInfo.compressedSize = 0;
     allocationInfo.generateMipmaps = false;
@@ -205,7 +205,7 @@ void create (const ContextCreateInfo& createInfo, Context& output) {
     allocationInfo.height = SCAST <uint32_t> (height);
     allocationInfo.pixels = RCAST <const char*> (pixels);
 
-    vkutils::allocateTexture (
+    vku::allocateTexture (
       output.device,
       output.allocator,
       allocationInfo,
@@ -287,7 +287,7 @@ void create (const ContextCreateInfo& createInfo, Context& output) {
   }
 
   {
-    vkutils::GraphicsPipelineCreateInfo createInfos[1];
+    vku::GraphicsPipelineCreateInfo createInfos[1];
 
     VkVertexInputBindingDescription binding;
     binding.binding = 0;
@@ -379,7 +379,7 @@ void create (const ContextCreateInfo& createInfo, Context& output) {
     createInfos[0].colorBlendInfo = &colorBlendInfo;
     createInfos[0].depthStencilInfo = &depthStencilInfo;
 
-    rei::vkutils::createGraphicsPipelines (
+    vku::createGraphicsPipelines (
       output.device,
       VK_NULL_HANDLE,
       ARRAY_SIZE (createInfos),

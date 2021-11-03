@@ -10,7 +10,7 @@
 #include <lz4/lib/lz4.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
-namespace rei::vkutils {
+namespace rei::vku {
 
 void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices& output) {
   output.haveGraphics = output.havePresent = output.haveTransfer = output.haveCompute = false;
@@ -72,11 +72,11 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
       auto availableExtensions = ALLOCA (VkExtensionProperties, extensionsCount);
       VK_CHECK (vkEnumerateDeviceExtensionProperties (current, nullptr, &extensionsCount, availableExtensions));
 
-      for (uint32_t required = 0; required < ARRAY_SIZE (vkcommon::requiredDeviceExtensions); ++required) {
+      for (uint32_t required = 0; required < ARRAY_SIZE (vkc::requiredDeviceExtensions); ++required) {
 	supportsExtensions = false;
 
 	for (uint32_t present = 0; present < extensionsCount; ++present) {
-	  if (!strcmp (availableExtensions[present].extensionName, vkcommon::requiredDeviceExtensions[required])) {
+	  if (!strcmp (availableExtensions[present].extensionName, vkc::requiredDeviceExtensions[required])) {
 	    supportsExtensions = true;
 	    break;
 	  }
@@ -408,14 +408,14 @@ void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo& allocat
 }
 
 void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer& output) {
-  rei::vkutils::BufferAllocationInfo allocationInfo;
+  BufferAllocationInfo allocationInfo;
   allocationInfo.size = size;
   allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY;
   allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
   allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-  rei::vkutils::allocateBuffer (allocator, allocationInfo, output);
+  allocateBuffer (allocator, allocationInfo, output);
 }
 
 void copyBuffer (VkDevice device, const TransferContext& transferContext, const Buffer& source, Buffer& destination) {

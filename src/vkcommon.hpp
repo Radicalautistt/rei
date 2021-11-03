@@ -27,7 +27,7 @@
 	   "%s:%d Vulkan error %s occured in %s\n", \
 	   __FILE__,                                \
 	   __LINE__,                                \
-	   rei::vkcommon::getError (error),         \
+	   rei::vkc::getError (error),              \
 	   __FUNCTION__                             \
 	 );                                         \
                                                     \
@@ -37,21 +37,7 @@
 #  endif
 #endif
 
-namespace rei::vkcommon {
-
-#ifndef NDEBUG
-constexpr const char* validationLayers[] {
-  "VK_LAYER_KHRONOS_validation"
-};
-#endif
-
-constexpr const char* requiredInstanceExtensions[] {
-  VK_KHR_SURFACE_EXTENSION_NAME,
-  VK_KHR_XCB_SURFACE_EXTENSION_NAME,
-#ifndef NDEBUG
-  VK_EXT_DEBUG_UTILS_EXTENSION_NAME
-#endif
-};
+namespace rei::vkc {
 
 constexpr const char* requiredDeviceExtensions[] {
   VK_KHR_SWAPCHAIN_EXTENSION_NAME

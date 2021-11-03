@@ -26,22 +26,8 @@ struct Frame {
   VkSemaphore presentSemaphore;
 };
 
-struct Vertex2D {
-  float x, y;
-  float u, v;
-};
-
-constexpr Vertex2D quadVertices[4] {
-  {0.5f, 0.5f, 1.f, 1.f},
-  {0.5f, -0.5f, 1.f, 0.f},
-  {-0.5f, -0.5f, 0.f, 0.f},
-  {-0.5f, 0.5f, 0.f, 1.f}
-};
-
-constexpr uint16_t quadIndices[6] {0, 1, 3, 1, 2, 3};
-
 int main () {
-  rei::extra::xcb::Window window;
+  rei::xcb::Window window;
   rei::Camera camera {{0.f, 1.f, 0.f}, {0.f, 100.f, -10.f}, -90.f, 0.f};
 
   VkInstance instance;
@@ -57,19 +43,19 @@ int main () {
 
   VmaAllocator allocator;
 
-  rei::vkutils::Swapchain swapchain;
+  rei::vku::Swapchain swapchain;
   VkRenderPass renderPass;
   uint32_t frameIndex = 0;
   Frame frames[FRAMES_COUNT];
   VkFramebuffer* framebuffers;
-  VkClearValue clearValues[2] {};
+  VkClearValue clearValues[2];
 
   VkPipelineCache pipelineCache;
   VkDescriptorPool mainDescriptorPool;
 
-  rei::extra::imgui::Context imguiContext;
+  rei::imgui::Context imguiContext;
 
-  rei::vkutils::TransferContext transferContext;
+  rei::vku::TransferContext transferContext;
 
   rei::gltf::Model sponza;
 
@@ -80,17 +66,25 @@ int main () {
   VulkanContext::init ();
 
   { // Create window
-    rei::extra::xcb::WindowCreateInfo createInfo;
+    rei::xcb::WindowCreateInfo createInfo;
     createInfo.x = 0;
     createInfo.y = 0;
     createInfo.width = 640;
     createInfo.height = 480;
     createInfo.name = "Rei playground";
 
-    rei::extra::xcb::createWindow (createInfo, window);
+    rei::xcb::createWindow (createInfo, window);
   }
 
   { // Create instance
+    const char* requiredExtensions[] {
+      VK_KHR_SURFACE_EXTENSION_NAME,
+      VK_KHR_XCB_SURFACE_EXTENSION_NAME,
+      #ifndef NDEBUG
+      VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+      #endif
+    };
+
     VkApplicationInfo applicationInfo {APPLICATION_INFO};
     applicationInfo.pEngineName = "Rei";
     applicationInfo.apiVersion = VULKAN_VERSION;
@@ -98,15 +92,17 @@ int main () {
 
     VkInstanceCreateInfo createInfo {INSTANCE_CREATE_INFO};
     createInfo.pApplicationInfo = &applicationInfo;
-    createInfo.ppEnabledExtensionNames = rei::vkcommon::requiredInstanceExtensions;
-    createInfo.enabledExtensionCount = ARRAY_SIZE (rei::vkcommon::requiredInstanceExtensions);
+    createInfo.ppEnabledExtensionNames = requiredExtensions;
+    createInfo.enabledExtensionCount = ARRAY_SIZE (requiredExtensions);
 
     #ifndef NDEBUG
-    auto debugMessengerInfo = rei::vkinit::debugMessengerInfo ();
+    auto debugMessengerInfo = rei::vki::debugMessengerInfo ();
 
+    const char* validationLayers[] {"VK_LAYER_KHRONOS_validation"};
+
+    createInfo.enabledLayerCount = 1;
     createInfo.pNext = &debugMessengerInfo;
-    createInfo.ppEnabledLayerNames = rei::vkcommon::validationLayers;
-    createInfo.enabledLayerCount = ARRAY_SIZE (rei::vkcommon::validationLayers);
+    createInfo.ppEnabledLayerNames = validationLayers;
     #endif
 
     VK_CHECK (vkCreateInstance (&createInfo, nullptr, &instance));
@@ -115,7 +111,7 @@ int main () {
 
   #ifndef NDEBUG
   { // Create debug messenger if debug mode is enabled
-    auto createInfo = rei::vkinit::debugMessengerInfo ();
+    auto createInfo = rei::vki::debugMessengerInfo ();
     VK_CHECK (vkCreateDebugUtilsMessengerEXT (instance, &createInfo, nullptr, &debugMessenger));
   }
   #endif
@@ -129,8 +125,8 @@ int main () {
   }
 
   { // Choose physical device, create logical device
-    rei::vkutils::QueueFamilyIndices indices;
-    rei::vkutils::choosePhysicalDevice (instance, windowSurface, indices, physicalDevice);
+    rei::vku::QueueFamilyIndices indices;
+    rei::vku::choosePhysicalDevice (instance, windowSurface, indices, physicalDevice);
 
     {
       VkFormatProperties formatProperties;
@@ -160,8 +156,8 @@ int main () {
     createInfo.queueCreateInfoCount = 1;
     createInfo.pQueueCreateInfos = &queueInfo;
     createInfo.pEnabledFeatures = &enabledFeatures;
-    createInfo.ppEnabledExtensionNames = rei::vkcommon::requiredDeviceExtensions;
-    createInfo.enabledExtensionCount = ARRAY_SIZE (rei::vkcommon::requiredDeviceExtensions);
+    createInfo.ppEnabledExtensionNames = rei::vkc::requiredDeviceExtensions;
+    createInfo.enabledExtensionCount = ARRAY_SIZE (rei::vkc::requiredDeviceExtensions);
 
     VK_CHECK (vkCreateDevice (physicalDevice, &createInfo, nullptr, &device));
 
@@ -205,7 +201,7 @@ int main () {
   }
 
   { // Create swapchain
-    rei::vkutils::SwapchainCreateInfo createInfo;
+    rei::vku::SwapchainCreateInfo createInfo;
     createInfo.device = device;
     createInfo.window = &window;
     createInfo.allocator = allocator;
@@ -213,7 +209,7 @@ int main () {
     createInfo.windowSurface = windowSurface;
     createInfo.physicalDevice = physicalDevice;
 
-    rei::vkutils::createSwapchain (createInfo, swapchain);
+    rei::vku::createSwapchain (createInfo, swapchain);
   }
 
   { // Create main render pass
@@ -338,6 +334,7 @@ int main () {
     VkPipelineCacheCreateInfo createInfo {PIPELINE_CACHE_CREATE_INFO};
     rei::utils::File cacheFile;
     auto result = rei::utils::readFile ("pipeline.cache", true, cacheFile);
+
     switch (result) {
       case rei::Result::Success: {
 	puts ("Reusing pipeline cache...");
@@ -354,7 +351,7 @@ int main () {
   }
 
   { // Create imgui context
-    rei::extra::imgui::ContextCreateInfo createInfo;
+    rei::imgui::ContextCreateInfo createInfo;
     createInfo.device = device;
     createInfo.window = &window;
     createInfo.allocator = allocator;
@@ -363,7 +360,7 @@ int main () {
     createInfo.transferContext = &transferContext;
     createInfo.descriptorPool = mainDescriptorPool;
 
-    rei::extra::imgui::create (createInfo, imguiContext);
+    rei::imgui::create (createInfo, imguiContext);
   }
 
   rei::gltf::loadModel (device, allocator, transferContext, "assets/models/sponza-scene/Sponza.gltf", sponza);
@@ -444,18 +441,20 @@ int main () {
 	vkCmdBeginRenderPass (currentFrame.commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
       }
 
-      rei::math::Matrix4 viewMatrix;
-      rei::math::lookAt (camera.position, camera.position + camera.front, camera.up, viewMatrix);
+      {
+        rei::math::Matrix4 viewMatrix;
+        rei::math::lookAt (camera.position, camera.position + camera.front, camera.up, viewMatrix);
 
-      rei::math::Matrix4 mvp = camera.projection * viewMatrix * modelMatrix;
-      sponza.draw (currentFrame.commandBuffer, mvp);
+        rei::math::Matrix4 mvp = camera.projection * viewMatrix * modelMatrix;
+        sponza.draw (currentFrame.commandBuffer, mvp);
 
-      imguiContext.newFrame ();
-      ImGui::ShowMetricsWindow ();
-      ImGui::Render ();
-      const ImDrawData* drawData = ImGui::GetDrawData ();
-      imguiContext.updateBuffers (drawData);
-      imguiContext.renderDrawData (drawData, currentFrame.commandBuffer);
+        imguiContext.newFrame ();
+        ImGui::ShowMetricsWindow ();
+        ImGui::Render ();
+        const ImDrawData* drawData = ImGui::GetDrawData ();
+        imguiContext.updateBuffers (drawData);
+        imguiContext.renderDrawData (drawData, currentFrame.commandBuffer);
+      }
 
       vkCmdEndRenderPass (currentFrame.commandBuffer);
       VK_CHECK (vkEndCommandBuffer (currentFrame.commandBuffer));
@@ -495,7 +494,7 @@ int main () {
   vkDeviceWaitIdle (device);
 
   rei::gltf::destroyModel (device, allocator, sponza);
-  rei::extra::imgui::destroy (device, allocator, imguiContext);
+  rei::imgui::destroy (device, allocator, imguiContext);
 
   { // Save pipeline cache for future reuse
     size_t size = 0;
@@ -532,7 +531,7 @@ int main () {
 
   vkDestroyRenderPass (device, renderPass, nullptr);
 
-  rei::vkutils::destroySwapchain (device, allocator, swapchain);
+  rei::vku::destroySwapchain (device, allocator, swapchain);
 
   vmaDestroyAllocator (allocator);
   vkDestroyDevice (device, nullptr);
@@ -543,6 +542,6 @@ int main () {
   #endif
 
   vkDestroyInstance (instance, nullptr);
-  rei::extra::xcb::destroyWindow (window);
+  rei::xcb::destroyWindow (window);
   VulkanContext::shutdown ();
 }
