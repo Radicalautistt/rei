@@ -430,6 +430,64 @@ void copyBuffer (VkDevice device, const TransferContext& transferContext, const 
   submitImmediateCommand (device, transferContext, commandBuffer);
 }
 
+void transitionImageLayout (
+  VkCommandBuffer commandBuffer,
+  const ImageLayoutTransitionInfo& transitionInfo,
+  VkImage image) {
+
+  VkImageMemoryBarrier barrier {IMAGE_MEMORY_BARRIER};
+  barrier.image = image;
+  barrier.oldLayout = transitionInfo.oldLayout;
+  barrier.newLayout = transitionInfo.newLayout;
+  barrier.subresourceRange = *transitionInfo.subresourceRange;
+
+  switch (transitionInfo.oldLayout) {
+    case VK_IMAGE_LAYOUT_UNDEFINED:
+      barrier.srcAccessMask = VULKAN_NO_FLAGS;
+      break;
+
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+      barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+      break;
+
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+      barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+      break;
+
+    default:
+      barrier.srcAccessMask = VULKAN_NO_FLAGS;
+      break;
+  }
+
+  switch (transitionInfo.newLayout) {
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+      barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+      break;
+
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+      barrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+      break;
+
+    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+      barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+      break;
+
+    default:
+      barrier.dstAccessMask = VULKAN_NO_FLAGS;
+      break;
+  }
+
+  vkCmdPipelineBarrier (
+    commandBuffer,
+    transitionInfo.source,
+    transitionInfo.destination,
+    VULKAN_NO_FLAGS,
+    0, nullptr,
+    0, nullptr,
+    1, &barrier
+  );
+}
+
 void allocateTexture (
   VkDevice device,
   VmaAllocator allocator,
@@ -501,25 +559,18 @@ void allocateTexture (
   {
     auto commandBuffer = startImmediateCommand (device, transferContext.commandPool);
 
-    VkImageMemoryBarrier transferBarrier {IMAGE_MEMORY_BARRIER};
-    transferBarrier.image = output.handle;
-    transferBarrier.srcAccessMask = VULKAN_NO_FLAGS;
-    transferBarrier.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
-    transferBarrier.subresourceRange = subresourceRange;
-    transferBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    {
+      ImageLayoutTransitionInfo transitionInfo;
+      transitionInfo.subresourceRange = &subresourceRange;
+      transitionInfo.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      transitionInfo.source = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-    vkCmdPipelineBarrier (
-      commandBuffer,
-      VK_PIPELINE_STAGE_TRANSFER_BIT,
-      VK_PIPELINE_STAGE_TRANSFER_BIT,
-      VULKAN_NO_FLAGS,
-      0, nullptr,
-      0, nullptr,
-      1, &transferBarrier
-    );
+      transitionImageLayout (commandBuffer, transitionInfo, output.handle);
+    }
 
-    VkBufferImageCopy copyRegion;
+    VkBufferImageCopy copyRegion {};
     copyRegion.bufferOffset = 0;
     copyRegion.bufferRowLength = 0;
     copyRegion.imageExtent = extent;
@@ -538,37 +589,22 @@ void allocateTexture (
       1, &copyRegion
     );
 
-    VkAccessFlags destinationAccessMask =
-      allocationInfo.generateMipmaps ?
-      VK_ACCESS_MEMORY_READ_BIT :
-      VK_ACCESS_SHADER_READ_BIT;
-
-    VkImageLayout newLayout =
-      allocationInfo.generateMipmaps ?
-      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL :
-      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    VkPipelineStageFlags destinationStage =
+    ImageLayoutTransitionInfo transitionInfo;
+    transitionInfo.destination=
       allocationInfo.generateMipmaps ?
       VK_PIPELINE_STAGE_TRANSFER_BIT :
       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 
-    auto& readBarrier = transferBarrier;
-    readBarrier.dstAccessMask = destinationAccessMask;
-    readBarrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
-    readBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    readBarrier.newLayout = newLayout;
+    transitionInfo.newLayout =
+      allocationInfo.generateMipmaps ?
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL :
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    vkCmdPipelineBarrier (
-      commandBuffer,
-      VK_PIPELINE_STAGE_TRANSFER_BIT,
-      destinationStage,
-      VULKAN_NO_FLAGS,
-      0, nullptr,
-      0, nullptr,
-      1, &readBarrier
-    );
+    transitionInfo.subresourceRange = &subresourceRange;
+    transitionInfo.source= VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transitionInfo.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
+    transitionImageLayout (commandBuffer, transitionInfo, output.handle);
     submitImmediateCommand (device, transferContext, commandBuffer);
   }
 

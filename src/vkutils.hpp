@@ -95,6 +95,12 @@ struct Buffer {
   VkDeviceSize size;
 };
 
+struct ImageLayoutTransitionInfo {
+  VkImageLayout oldLayout, newLayout;
+  VkPipelineStageFlags source, destination;
+  VkImageSubresourceRange* subresourceRange;
+};
+
 struct TextureAllocationInfo {
   bool compressed, generateMipmaps;
   uint32_t width, height;
@@ -130,6 +136,12 @@ void submitImmediateCommand (VkDevice device, const TransferContext& transferCon
 void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo& allocationInfo, Buffer& output);
 void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer& output);
 void copyBuffer (VkDevice device, const TransferContext& transferContext, const Buffer& source, Buffer& destination);
+
+void transitionImageLayout (
+  VkCommandBuffer commandBuffer,
+  const ImageLayoutTransitionInfo& transitionInfo,
+  VkImage image
+);
 
 void allocateTexture (
   VkDevice device,

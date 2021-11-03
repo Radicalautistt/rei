@@ -5,7 +5,7 @@ linkPaths = -L third-party/lz4/lib/
 linkPaths += -L third-party/imgui/
 linkPaths += -L third-party/simdjson/
 linkPaths += -L third-party/VulkanMemoryAllocator/build/src/
-links = -ldl -lm -lxcb -llz4 -lImgui -lSimdjson -lVulkanMemoryAllocator
+links = -ldl -lm -lxcb -llz4 -lIMGUI -lSimdjson -lVulkanMemoryAllocator
 
 flags = -std=c++17 -Wall -Wextra -Wconversion -Og -march=native -Wno-missing-field-initializers -g
 sourceFiles = $(call rwildcard, src, *.cpp, *.hpp, *.h)
