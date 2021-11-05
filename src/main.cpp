@@ -63,7 +63,7 @@ int main () {
   rei::math::Matrix4::translate (modelMatrix, {0.f, 0.f, 1.f});
 
   rei::utils::Timer::init ();
-  VulkanContext::init ();
+  rei::VulkanContext::init ();
 
   { // Create window
     rei::xcb::WindowCreateInfo createInfo;
@@ -106,7 +106,7 @@ int main () {
     #endif
 
     VK_CHECK (vkCreateInstance (&createInfo, nullptr, &instance));
-    VulkanContext::loadInstance (instance);
+    rei::VulkanContext::loadInstance (instance);
   }
 
   #ifndef NDEBUG
@@ -135,7 +135,7 @@ int main () {
       VkFormatFeatureFlags requiredFlags = VK_FORMAT_FEATURE_BLIT_SRC_BIT;
       requiredFlags |= VK_FORMAT_FEATURE_BLIT_DST_BIT;
 
-      assert (formatProperties.optimalTilingFeatures & requiredFlags);
+      REI_ASSERT (formatProperties.optimalTilingFeatures & requiredFlags);
     }
 
     VkPhysicalDeviceFeatures enabledFeatures {};
@@ -161,7 +161,7 @@ int main () {
 
     VK_CHECK (vkCreateDevice (physicalDevice, &createInfo, nullptr, &device));
 
-    VulkanContext::loadDevice (device);
+    rei::VulkanContext::loadDevice (device);
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &presentQueue);
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &computeQueue);
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &graphicsQueue);
@@ -544,5 +544,5 @@ int main () {
 
   vkDestroyInstance (instance, nullptr);
   rei::xcb::destroyWindow (window);
-  VulkanContext::shutdown ();
+  rei::VulkanContext::shutdown ();
 }

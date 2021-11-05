@@ -147,6 +147,8 @@ extern PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
 #  undef X
 #endif
 
+namespace rei {
+
 struct VulkanContext {
   static void init ();
   static void shutdown ();
@@ -155,6 +157,8 @@ struct VulkanContext {
 
   static void* library;
 };
+
+}
 
 // NOTE just in case anyone ever sees this: I haven't written this by hand
 #define SUBMIT_INFO VK_STRUCTURE_TYPE_SUBMIT_INFO

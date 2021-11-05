@@ -1,18 +1,17 @@
 #include <stdio.h>
 
-#include "common.hpp"
 #include "asset_baker.hpp"
 
 #include <lz4/lib/lz4.h>
 #include <stb/stb_image.h>
 #include <stb/stb_sprintf.h>
 
-namespace rei::assets::baker {
+namespace rei::assets {
 
 void bakeImage (const char* relativePath) {
   int width, height, channels;
   auto pixels = stbi_load (relativePath, &width, &height, &channels, STBI_rgb_alpha);
-  assert (pixels);
+  REI_ASSERT (pixels);
 
   char outputPath[256] {};
   strcpy (outputPath, relativePath);
@@ -66,9 +65,9 @@ R"({
   fclose (outputFile);
 }
 
-void readAsset (const char* relativePath, simdjson::ondemand::parser& parser, Asset& output) {
+Result readAsset (const char* relativePath, simdjson::ondemand::parser& parser, Asset& output) {
   FILE* assetFile = fopen (relativePath, "rb");
-  assert (assetFile);
+  if (!assetFile) return Result::FileDoesNotExist;
 
   size_t metadataSize = 0;
   fread (&metadataSize, sizeof (size_t), 1, assetFile);
@@ -85,6 +84,7 @@ void readAsset (const char* relativePath, simdjson::ondemand::parser& parser, As
   fread (output.data, 1, output.size, assetFile);
 
   fclose (assetFile);
+  return Result::Success;
 }
 
 }

@@ -2,9 +2,12 @@
 #define ASSET_BAKER_HPP
 
 #include <stddef.h>
+
+#include "common.hpp"
+
 #include <simdjson/simdjson.h>
 
-namespace rei::assets::baker {
+namespace rei::assets {
 
 struct Asset {
   char* data;
@@ -14,7 +17,7 @@ struct Asset {
 };
 
 void bakeImage (const char* relativePath);
-void readAsset (const char* relativePath, simdjson::ondemand::parser& parser, Asset& output);
+Result readAsset (const char* relativePath, simdjson::ondemand::parser& parser, Asset& output);
 
 }
 

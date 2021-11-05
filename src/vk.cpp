@@ -1,6 +1,5 @@
 #include <dlfcn.h>
 #include <stdio.h>
-#include <assert.h>
 
 #include "vk.hpp"
 #include "common.hpp"
@@ -13,17 +12,17 @@ PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = nullptr;
   VK_DEVICE_FUNCTIONS
 #undef X
 
-void* VulkanContext::library = nullptr;
+void* rei::VulkanContext::library = nullptr;
 
-void VulkanContext::init () {
-  puts ("Loading Vulkan functions from libvulkan.so.1");
+void rei::VulkanContext::init () {
+  LOGS_INFO ("Loading Vulkan functions from " ANSI_YELLOW "libvulkan.so.1");
   library = dlopen ("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
   if (!library) {
-    puts ("Failed, going with libvulkan.so instead");
+    LOGS_WARNING ("Failed, going with " ANSI_RED "libvulkan.so" ANSI_YELLOW " instead");
     library = dlopen ("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
   }
 
-  assert (library);
+  REI_ASSERT (library);
 
   vkGetInstanceProcAddr = RCAST <PFN_vkGetInstanceProcAddr> (dlsym (library, "vkGetInstanceProcAddr"));
 
@@ -33,17 +32,17 @@ void VulkanContext::init () {
   #undef X
 }
 
-void VulkanContext::shutdown () {
+void rei::VulkanContext::shutdown () {
   dlclose (library);
 }
 
-void VulkanContext::loadInstance (VkInstance instance) {
+void rei::VulkanContext::loadInstance (VkInstance instance) {
   #define X(name) name = RCAST <PFN_##name> (vkGetInstanceProcAddr (instance, #name));
     VK_INSTANCE_FUNCTIONS
   #undef X
 }
 
-void VulkanContext::loadDevice (VkDevice device) {
+void rei::VulkanContext::loadDevice (VkDevice device) {
   #define X(name) name = RCAST <PFN_##name> (vkGetDeviceProcAddr (device, #name));
     VK_DEVICE_FUNCTIONS
   #undef X

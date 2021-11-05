@@ -1,6 +1,4 @@
-#include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #include <stdlib.h>
 
 #include "math.hpp"
@@ -155,8 +153,8 @@ void loadModel (
     char* extension = strrchr (texturePath, '.');
     strcpy (extension + 1, "rtex");
 
-    assets::baker::Asset asset;
-    assets::baker::readAsset (texturePath, parser, asset);
+    assets::Asset asset;
+    REI_CHECK (assets::readAsset (texturePath, parser, asset));
 
     simdjson::padded_string paddedMetadata {asset.metadata, strlen (asset.metadata)};
     simdjson::ondemand::document metadata = parser.iterate (paddedMetadata);

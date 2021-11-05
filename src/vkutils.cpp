@@ -1,6 +1,5 @@
 #include <math.h>
 #include <string.h>
-#include <assert.h>
 
 #include "utils.hpp"
 #include "common.hpp"
@@ -106,7 +105,7 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
     }
   }
 
-  assert (output);
+  REI_ASSERT (output);
 }
 
 void createSwapchain (const SwapchainCreateInfo& createInfo, Swapchain& output) {

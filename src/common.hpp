@@ -69,16 +69,55 @@
 #  define LOGS_WARNING(string) LOG_WARNING ("%s", string)
 #endif
 
-#define SCAST static_cast
-#define RCAST reinterpret_cast
+#ifndef SCAST
+#  define SCAST static_cast
+#endif
 
-#define MIN(a, b) (((a) > (b)) ? (b) : (a))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#ifndef RCAST
+#  define RCAST reinterpret_cast
+#endif
 
-#define ARRAY_SIZE(array) sizeof (array) / sizeof *array
+#ifndef MIN
+#  define MIN(a, b) (((a) > (b)) ? (b) : (a))
+#endif
 
-#define ALLOCA(Type, count) SCAST <Type*> (alloca (sizeof (Type) * count))
-#define MALLOC(Type, count) SCAST <Type*> (malloc (sizeof (Type) * count))
+#ifndef MAX
+#  define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef ARRAY_SIZE
+#  define ARRAY_SIZE(array) sizeof (array) / sizeof *array
+#endif
+
+#ifndef ALLOCA
+#  define ALLOCA(Type, count) SCAST <Type*> (alloca (sizeof (Type) * count))
+#endif
+
+#ifndef MALLOC
+#  define MALLOC(Type, count) SCAST <Type*> (malloc (sizeof (Type) * count))
+#endif
+
+#ifdef NDEBUG
+#  ifndef REI_ASSERT
+#    define REI_ASSERT(condition)
+#  endif
+#else
+#  ifndef REI_ASSERT
+#    define REI_ASSERT(condition)                                    \
+       if (condition) {                                              \
+         (void) 0;                                                   \
+       } else {                                                      \
+         LOG_ERROR (                                                 \
+           "%s:%d Assertion " ANSI_YELLOW "[%s]" ANSI_RED " failed", \
+           __FILE__,                                                 \
+           __LINE__,                                                 \
+           #condition                                                \
+         );	                                                     \
+                                                                     \
+         __builtin_trap ();                                          \
+       }
+#  endif
+#endif
 
 #ifdef NDEBUG
 #  ifndef REI_CHECK
