@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -80,7 +79,7 @@ AccessorComponentType parseAccessorComponentType (uint64_t type) noexcept {
 }
 
 void load (const char* relativePath, Data& output) {
-  printf ("Loading a gltf model from %s\n", relativePath);
+  LOG_INFO ("Loading a gltf model from " ANSI_YELLOW "%s", relativePath);
 
   { // Load buffer data from .bin file
     char binaryPath[256] {};

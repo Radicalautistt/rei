@@ -36,12 +36,20 @@ const char* getError (VkResult error) noexcept {
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback (
-  [[maybe_unused]] VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-  [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT messageType,
+  VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+  VkDebugUtilsMessageTypeFlagsEXT messageType,
   const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
-  [[maybe_unused]] void* userData) {
+  void* userData) {
 
-  fprintf (stderr, "%s\n\n", callbackData->pMessage);
+  (void) messageType;
+  (void) userData;
+
+  if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+    LOGS_ERROR (callbackData->pMessage);
+
+  if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    LOGS_WARNING (callbackData->pMessage);
+
   return VK_FALSE;
 }
 

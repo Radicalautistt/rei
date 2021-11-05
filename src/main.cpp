@@ -337,12 +337,13 @@ int main () {
 
     switch (result) {
       case rei::Result::Success: {
-	puts ("Reusing pipeline cache...");
+	LOGS_INFO ("Reusing pipeline cache...");
         createInfo.initialDataSize = cacheFile.size;
 	createInfo.pInitialData = cacheFile.contents;
       } break;
+
       default: {
-	puts ("Failed to obtain pipeline cache data, creating one from scratch");
+	LOGS_INFO ("Failed to obtain pipeline cache data, creating one from scratch");
       } break;
     }
 

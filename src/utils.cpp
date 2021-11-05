@@ -24,6 +24,7 @@ Result readFile (const char* relativePath, bool binary, File& output) {
 
   fseek (file, 0, SEEK_END);
   output.size = ftell (file);
+  if (!output.size) return Result::FileIsEmpty;
   rewind (file);
 
   output.contents = malloc (output.size);
