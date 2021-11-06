@@ -23,8 +23,8 @@ struct Window {
   void getMousePosition (float* output);
 };
 
-void createWindow (const WindowCreateInfo& createInfo, Window& output);
-void destroyWindow (Window& window);
+void createWindow (const WindowCreateInfo* createInfo, Window* output);
+void destroyWindow (Window* window);
 
 }
 

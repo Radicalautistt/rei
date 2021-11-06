@@ -78,7 +78,7 @@ AccessorComponentType parseAccessorComponentType (uint64_t type) noexcept {
   return result;
 }
 
-void load (const char* relativePath, Data& output) {
+void load (const char* relativePath, Data* output) {
   LOG_INFO ("Loading a gltf model from " ANSI_YELLOW "%s", relativePath);
 
   { // Load buffer data from .bin file
@@ -88,10 +88,10 @@ void load (const char* relativePath, Data& output) {
     strcpy (extension, ".bin");
 
     utils::File binaryFile;
-    REI_CHECK (utils::readFile (binaryPath, true, binaryFile));
+    REI_CHECK (utils::readFile (binaryPath, true, &binaryFile));
 
-    output.buffer = MALLOC (uint8_t, binaryFile.size);
-    memcpy (output.buffer, SCAST <uint8_t*> (binaryFile.contents), binaryFile.size);
+    output->buffer = MALLOC (uint8_t, binaryFile.size);
+    memcpy (output->buffer, SCAST <uint8_t*> (binaryFile.contents), binaryFile.size);
 
     free (binaryFile.contents);
   }
@@ -105,21 +105,21 @@ void load (const char* relativePath, Data& output) {
   simdjson::ondemand::document parsedGLTF = parser.iterate (rawGLTF);
 
   { // Load buffer views
-    output.bufferViewsCount = jsonArraySize (parsedGLTF["bufferViews"]);
-    output.bufferViews = MALLOC (BufferView, output.bufferViewsCount);
+    output->bufferViewsCount = jsonArraySize (parsedGLTF["bufferViews"]);
+    output->bufferViews = MALLOC (BufferView, output->bufferViewsCount);
 
     size_t index = 0;
     for (auto bufferView : parsedGLTF["bufferViews"].get_array ()) {
-      auto& newBufferView = output.bufferViews[index++];
-      newBufferView.buffer = SCAST <uint32_t> (bufferView["buffer"].get_uint64 ());
-      newBufferView.byteLength = SCAST <uint32_t> (bufferView["byteLength"].get_uint64 ());
-      newBufferView.byteOffset = SCAST <uint32_t> (bufferView["byteOffset"].get_uint64 ());
+      auto newBufferView = &output->bufferViews[index++];
+      newBufferView->buffer = SCAST <uint32_t> (bufferView["buffer"].get_uint64 ());
+      newBufferView->byteLength = SCAST <uint32_t> (bufferView["byteLength"].get_uint64 ());
+      newBufferView->byteOffset = SCAST <uint32_t> (bufferView["byteOffset"].get_uint64 ());
     }
   }
 
   { // Load accessors
-    output.accessorsCount = jsonArraySize (parsedGLTF["accessors"]);
-    output.accessors = MALLOC (Accessor, output.accessorsCount);
+    output->accessorsCount = jsonArraySize (parsedGLTF["accessors"]);
+    output->accessors = MALLOC (Accessor, output->accessorsCount);
 
     size_t index = 0;
     for (auto accessor : parsedGLTF["accessors"].get_array ()) {
@@ -127,108 +127,108 @@ void load (const char* relativePath, Data& output) {
       std::string_view accessorTypeView = accessor["type"];
       strncpy (accessorType, accessorTypeView.data (), accessorTypeView.size ());
 
-      auto& newAccessor = output.accessors[index++];
-      newAccessor.type = parseAccessorType (accessorType);
-      newAccessor.count = SCAST <uint32_t> (accessor["count"].get_uint64 ());
-      newAccessor.bufferView = SCAST <uint32_t> (accessor["bufferView"].get_uint64 ());
-      newAccessor.byteOffset = SCAST <uint32_t> (accessor["byteOffset"].get_uint64 ());
-      newAccessor.componentType = parseAccessorComponentType (accessor["componentType"].get_uint64 ());
+      auto newAccessor = &output->accessors[index++];
+      newAccessor->type = parseAccessorType (accessorType);
+      newAccessor->count = SCAST <uint32_t> (accessor["count"].get_uint64 ());
+      newAccessor->bufferView = SCAST <uint32_t> (accessor["bufferView"].get_uint64 ());
+      newAccessor->byteOffset = SCAST <uint32_t> (accessor["byteOffset"].get_uint64 ());
+      newAccessor->componentType = parseAccessorComponentType (accessor["componentType"].get_uint64 ());
     }
   }
 
   { // Load primitives
     auto defaultMesh = *parsedGLTF["meshes"].get_array().begin();
-    output.mesh.primitivesCount = jsonArraySize (defaultMesh["primitives"]);
-    output.mesh.primitives = MALLOC (Primitive, output.mesh.primitivesCount);
+    output->mesh.primitivesCount = jsonArraySize (defaultMesh["primitives"]);
+    output->mesh.primitives = MALLOC (Primitive, output->mesh.primitivesCount);
 
     #define GET_ATTRIBUTE(name, fieldName) do {                                                     \
       auto result = primitive["attributes"][name];                                                  \
       if (result.error () == simdjson::SUCCESS)                                                     \
-        newPrimitive.attributes.fieldName = (uint32_t) primitive["attributes"][name].get_uint64 (); \
+        newPrimitive->attributes.fieldName = (uint32_t) primitive["attributes"][name].get_uint64 (); \
     } while (false)
 
     size_t index = 0;
     for (auto primitive : defaultMesh["primitives"].get_array ()) {
-      auto& newPrimitive = output.mesh.primitives[index++];
+      auto newPrimitive = &output->mesh.primitives[index++];
       GET_ATTRIBUTE ("TEXCOORD_0", uv);
       GET_ATTRIBUTE ("NORMAL", normal);
       GET_ATTRIBUTE ("TANGENT", tangent);
       GET_ATTRIBUTE ("POSITION", position);
 
-      newPrimitive.mode = parsePrimitiveMode (primitive["mode"].get_uint64 ());
-      newPrimitive.indices = SCAST <uint32_t> (primitive["indices"].get_uint64 ());
-      newPrimitive.material = SCAST <uint32_t> (primitive["material"].get_uint64 ());
+      newPrimitive->mode = parsePrimitiveMode (primitive["mode"].get_uint64 ());
+      newPrimitive->indices = SCAST <uint32_t> (primitive["indices"].get_uint64 ());
+      newPrimitive->material = SCAST <uint32_t> (primitive["material"].get_uint64 ());
     }
 
     #undef GET_ATTRIBUTE
   }
 
   {  // Load images
-     output.imagesCount = jsonArraySize (parsedGLTF["images"]);
-     output.images = MALLOC (Image, output.imagesCount);
+     output->imagesCount = jsonArraySize (parsedGLTF["images"]);
+     output->images = MALLOC (Image, output->imagesCount);
 
      size_t index = 0;
      for (auto image : parsedGLTF["images"].get_array ()) {
        std::string_view uriView = image["uri"];
        std::string_view mimeTypeView = image["mimeType"];
 
-       auto& newImage = output.images[index++];
-       memset (newImage.uri, 0, sizeof (newImage.uri));
-       strncpy (newImage.uri, uriView.data (), uriView.size ());
+       auto newImage = &output->images[index++];
+       memset (newImage->uri, 0, sizeof (newImage->uri));
+       strncpy (newImage->uri, uriView.data (), uriView.size ());
 
        char mimeType[11] {};
        strncpy (mimeType, mimeTypeView.data (), mimeTypeView.size ());
-       newImage.mimeType = parseMimeType (mimeType);
+       newImage->mimeType = parseMimeType (mimeType);
      }
   }
 
   { // Load textures
-    output.texturesCount = jsonArraySize (parsedGLTF["textures"]);
-    output.textures = MALLOC (Texture, output.texturesCount);
+    output->texturesCount = jsonArraySize (parsedGLTF["textures"]);
+    output->textures = MALLOC (Texture, output->texturesCount);
 
     size_t index = 0;
     for (auto texture : parsedGLTF["textures"].get_array ()) {
-      auto& newTexture = output.textures[index++];
-      newTexture.source = SCAST <uint32_t> (texture["source"].get_uint64 ());
+      auto newTexture = &output->textures[index++];
+      newTexture->source = SCAST <uint32_t> (texture["source"].get_uint64 ());
     }
   }
 
   { // Load materials
-    output.materialsCount = jsonArraySize (parsedGLTF["materials"]);
-    output.materials = MALLOC (Material, output.materialsCount);
+    output->materialsCount = jsonArraySize (parsedGLTF["materials"]);
+    output->materials = MALLOC (Material, output->materialsCount);
 
     size_t index = 0;
     for (auto material : parsedGLTF["materials"].get_array ()) {
-      auto& newMaterial = output.materials[index++];
+      auto newMaterial = &output->materials[index++];
 
       {
       auto result = material["alphaMode"];
         if (result.error () != simdjson::SUCCESS) {
-          newMaterial.alphaMode = AlphaMode::Opaque;
+          newMaterial->alphaMode = AlphaMode::Opaque;
         } else {
           char alphaMode[7] {};
 
           std::string_view alphaModeView = result.value_unsafe ();
           strncpy (alphaMode, alphaModeView.data (), alphaModeView.size ());
 
-          newMaterial.alphaMode = parseAlphaMode (alphaMode);
+          newMaterial->alphaMode = parseAlphaMode (alphaMode);
         }
       }
 
-      newMaterial.pbrMetallicRoughness.baseColorTexture.index =
+      newMaterial->pbrMetallicRoughness.baseColorTexture.index =
 	SCAST <uint32_t> (material["pbrMetallicRoughness"]["baseColorTexture"]["index"].get_uint64());
     }
   }
 }
 
-void destroy (Data& data) {
-  free (data.materials);
-  free (data.textures);
-  free (data.images);
-  free (data.mesh.primitives);
-  free (data.accessors);
-  free (data.bufferViews);
-  free (data.buffer);
+void destroy (Data* data) {
+  free (data->materials);
+  free (data->textures);
+  free (data->images);
+  free (data->mesh.primitives);
+  free (data->accessors);
+  free (data->bufferViews);
+  free (data->buffer);
 }
 
 }

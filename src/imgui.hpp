@@ -58,8 +58,8 @@ struct Context {
   void renderDrawData (const ImDrawData* drawData, VkCommandBuffer commandBuffer);
 };
 
-void create (const ContextCreateInfo& createInfo, Context& output);
-void destroy (VkDevice device, VmaAllocator allocator, Context& context);
+void create (const ContextCreateInfo* createInfo, Context* output);
+void destroy (VkDevice device, VmaAllocator allocator, Context* context);
 
 };
 

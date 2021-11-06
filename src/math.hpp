@@ -122,16 +122,16 @@ struct alignas (16) Vector3 {
     return *this;
   }
 
-  static inline void normalize (Vector3& output) noexcept {
-    _mm_store_ps (&output.x, simd::m128::normalize (output.load ()));
+  static inline void normalize (Vector3* output) noexcept {
+    _mm_store_ps (&output->x, simd::m128::normalize (output->load ()));
   }
 
-  [[nodiscard]] static inline float dotProduct (const Vector3& a, const Vector3& b) noexcept {
-    return _mm_cvtss_f32 (simd::m128::dotProduct (a.load (), b.load ()));
+  [[nodiscard]] static inline float dotProduct (const Vector3* a, const Vector3* b) noexcept {
+    return _mm_cvtss_f32 (simd::m128::dotProduct (a->load (), b->load ()));
   }
 
-  static inline void crossProduct (const Vector3& a, const Vector3& b, Vector3& output) noexcept {
-    _mm_store_ps (&output.x, simd::m128::crossProduct (a.load (), b.load ()));
+  static inline void crossProduct (const Vector3* a, const Vector3* b, Vector3* output) noexcept {
+    _mm_store_ps (&output->x, simd::m128::crossProduct (a->load (), b->load ()));
   }
 };
 
@@ -267,10 +267,10 @@ inline Matrix4 operator * (const Matrix4& a, const Matrix4& b) noexcept {
 }
 
 void lookAt (
-  const Vector3& eye,
-  const Vector3& center,
-  const Vector3& up,
-  Matrix4& output
+  const Vector3* eye,
+  const Vector3* center,
+  const Vector3* up,
+  Matrix4* output
 ) noexcept;
 
 void perspective (

@@ -73,7 +73,7 @@ int main () {
     createInfo.height = 480;
     createInfo.name = "Rei playground";
 
-    rei::xcb::createWindow (createInfo, window);
+    rei::xcb::createWindow (&createInfo, &window);
   }
 
   { // Create instance
@@ -126,7 +126,7 @@ int main () {
 
   { // Choose physical device, create logical device
     rei::vku::QueueFamilyIndices indices;
-    rei::vku::choosePhysicalDevice (instance, windowSurface, indices, physicalDevice);
+    rei::vku::choosePhysicalDevice (instance, windowSurface, &indices, &physicalDevice);
 
     {
       VkFormatProperties formatProperties;
@@ -209,7 +209,7 @@ int main () {
     createInfo.windowSurface = windowSurface;
     createInfo.physicalDevice = physicalDevice;
 
-    rei::vku::createSwapchain (createInfo, swapchain);
+    rei::vku::createSwapchain (&createInfo, &swapchain);
   }
 
   { // Create main render pass
@@ -302,14 +302,14 @@ int main () {
     VkSemaphoreCreateInfo semaphoreInfo {SEMAPHORE_CREATE_INFO};
 
     for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
-      auto& current = frames[index];
-      VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &current.commandPool));
+      auto current = &frames[index];
+      VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &current->commandPool));
 
-      bufferInfo.commandPool = current.commandPool;
-      VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current.commandBuffer));
-      VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current.renderFence));
-      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current.renderSemaphore));
-      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current.presentSemaphore));
+      bufferInfo.commandPool = current->commandPool;
+      VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->commandBuffer));
+      VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current->renderFence));
+      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->renderSemaphore));
+      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->presentSemaphore));
     }
 
     fenceInfo.flags = VULKAN_NO_FLAGS;
@@ -333,7 +333,7 @@ int main () {
   { // Create/load pipeline cache
     VkPipelineCacheCreateInfo createInfo {PIPELINE_CACHE_CREATE_INFO};
     rei::utils::File cacheFile;
-    auto result = rei::utils::readFile ("pipeline.cache", true, cacheFile);
+    auto result = rei::utils::readFile ("pipeline.cache", true, &cacheFile);
 
     switch (result) {
       case rei::Result::Success: {
@@ -361,14 +361,14 @@ int main () {
     createInfo.transferContext = &transferContext;
     createInfo.descriptorPool = mainDescriptorPool;
 
-    rei::imgui::create (createInfo, imguiContext);
+    rei::imgui::create (&createInfo, &imguiContext);
   }
 
-  rei::gltf::loadModel (device, allocator, transferContext, "assets/models/sponza-scene/Sponza.gltf", sponza);
+  rei::gltf::load (device, allocator, &transferContext, "assets/models/sponza-scene/Sponza.gltf", &sponza);
 
   sponza.initDescriptorPool (device);
   sponza.initMaterialDescriptors (device);
-  sponza.initPipelines (device, renderPass, pipelineCache, swapchain);
+  sponza.initPipelines (device, renderPass, pipelineCache, &swapchain);
 
   { // Render loop
     bool running = true;
@@ -408,17 +408,17 @@ int main () {
 	free (event);
       }
 
-      auto& currentFrame = frames[frameIndex % FRAMES_COUNT];
+      const auto currentFrame = &frames[frameIndex % FRAMES_COUNT];
 
-      VK_CHECK (vkWaitForFences (device, 1, &currentFrame.renderFence, VK_TRUE, ~0ull));
-      VK_CHECK (vkResetFences (device, 1, &currentFrame.renderFence));
+      VK_CHECK (vkWaitForFences (device, 1, &currentFrame->renderFence, VK_TRUE, ~0ull));
+      VK_CHECK (vkResetFences (device, 1, &currentFrame->renderFence));
 
       uint32_t imageIndex = 0;
       VK_CHECK (vkAcquireNextImageKHR (
         device,
 	swapchain.handle,
 	~0ull,
-	currentFrame.presentSemaphore,
+	currentFrame->presentSemaphore,
 	VK_NULL_HANDLE,
 	&imageIndex
       ));
@@ -427,7 +427,7 @@ int main () {
         VkCommandBufferBeginInfo beginInfo {COMMAND_BUFFER_BEGIN_INFO};
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-	VK_CHECK (vkBeginCommandBuffer (currentFrame.commandBuffer, &beginInfo));
+	VK_CHECK (vkBeginCommandBuffer (currentFrame->commandBuffer, &beginInfo));
       }
 
       { // Begin render pass
@@ -439,26 +439,27 @@ int main () {
 	beginInfo.framebuffer = framebuffers[imageIndex];
 	beginInfo.clearValueCount = ARRAY_SIZE (clearValues);
 
-	vkCmdBeginRenderPass (currentFrame.commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBeginRenderPass (currentFrame->commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
       }
 
       {
         rei::math::Matrix4 viewMatrix;
-        rei::math::lookAt (camera.position, camera.position + camera.front, camera.up, viewMatrix);
+	auto center = camera.position + camera.front;
+        rei::math::lookAt (&camera.position, &center, &camera.up, &viewMatrix);
 
         rei::math::Matrix4 mvp = camera.projection * viewMatrix * modelMatrix;
-        sponza.draw (currentFrame.commandBuffer, mvp);
+        sponza.draw (currentFrame->commandBuffer, &mvp);
 
         imguiContext.newFrame ();
         ImGui::ShowMetricsWindow ();
         ImGui::Render ();
         const ImDrawData* drawData = ImGui::GetDrawData ();
         imguiContext.updateBuffers (drawData);
-        imguiContext.renderDrawData (drawData, currentFrame.commandBuffer);
+        imguiContext.renderDrawData (drawData, currentFrame->commandBuffer);
       }
 
-      vkCmdEndRenderPass (currentFrame.commandBuffer);
-      VK_CHECK (vkEndCommandBuffer (currentFrame.commandBuffer));
+      vkCmdEndRenderPass (currentFrame->commandBuffer);
+      VK_CHECK (vkEndCommandBuffer (currentFrame->commandBuffer));
 
       { // Submit written commands to a queue
         VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -468,11 +469,11 @@ int main () {
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pWaitDstStageMask = &waitStage;
-	submitInfo.pCommandBuffers = &currentFrame.commandBuffer;
-	submitInfo.pWaitSemaphores = &currentFrame.presentSemaphore;
-	submitInfo.pSignalSemaphores = &currentFrame.renderSemaphore;
+	submitInfo.pCommandBuffers = &currentFrame->commandBuffer;
+	submitInfo.pWaitSemaphores = &currentFrame->presentSemaphore;
+	submitInfo.pSignalSemaphores = &currentFrame->renderSemaphore;
 
-	VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame.renderFence));
+	VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->renderFence));
       }
 
       // Present resulting image
@@ -481,7 +482,7 @@ int main () {
       presentInfo.waitSemaphoreCount = 1;
       presentInfo.pImageIndices = &imageIndex;
       presentInfo.pSwapchains = &swapchain.handle;
-      presentInfo.pWaitSemaphores = &currentFrame.renderSemaphore;
+      presentInfo.pWaitSemaphores = &currentFrame->renderSemaphore;
 
       VK_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
       ++frameIndex;
@@ -494,8 +495,8 @@ int main () {
   // Wait for gpu to finish rendering of the last frame
   vkDeviceWaitIdle (device);
 
-  rei::gltf::destroyModel (device, allocator, sponza);
-  rei::imgui::destroy (device, allocator, imguiContext);
+  rei::gltf::destroy (device, allocator, &sponza);
+  rei::imgui::destroy (device, allocator, &imguiContext);
 
   { // Save pipeline cache for future reuse
     size_t size = 0;
@@ -518,11 +519,11 @@ int main () {
   vkDestroyCommandPool (device, transferContext.commandPool, nullptr);
 
   for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
-    auto& current = frames[index];
-    vkDestroySemaphore (device, current.presentSemaphore, nullptr);
-    vkDestroySemaphore (device, current.renderSemaphore, nullptr);
-    vkDestroyFence (device, current.renderFence, nullptr);
-    vkDestroyCommandPool (device, current.commandPool, nullptr);
+    auto current = &frames[index];
+    vkDestroySemaphore (device, current->presentSemaphore, nullptr);
+    vkDestroySemaphore (device, current->renderSemaphore, nullptr);
+    vkDestroyFence (device, current->renderFence, nullptr);
+    vkDestroyCommandPool (device, current->commandPool, nullptr);
   }
 
   for (uint32_t index = 0; index < swapchain.imagesCount; ++index)
@@ -532,7 +533,7 @@ int main () {
 
   vkDestroyRenderPass (device, renderPass, nullptr);
 
-  rei::vku::destroySwapchain (device, allocator, swapchain);
+  rei::vku::destroySwapchain (device, allocator, &swapchain);
 
   vmaDestroyAllocator (allocator);
   vkDestroyDevice (device, nullptr);
@@ -543,6 +544,6 @@ int main () {
   #endif
 
   vkDestroyInstance (instance, nullptr);
-  rei::xcb::destroyWindow (window);
+  rei::xcb::destroyWindow (&window);
   rei::VulkanContext::shutdown ();
 }

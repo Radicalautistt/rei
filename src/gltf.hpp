@@ -140,8 +140,8 @@ struct Data {
 [[nodiscard]] AccessorType parseAccessorType (const char* rawType) noexcept;
 [[nodiscard]] AccessorComponentType parseAccessorComponentType (uint64_t type) noexcept;
 
-void load (const char* relativePath, Data& output);
-void destroy (Data& data);
+void load (const char* relativePath, Data* output);
+void destroy (Data* data);
 
 }
 

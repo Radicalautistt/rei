@@ -23,7 +23,7 @@ struct Timer {
   [[nodiscard]] static float getCurrentTime () noexcept;
 };
 
-[[nodiscard]] Result readFile (const char* relativePath, bool binary, File& output);
+[[nodiscard]] Result readFile (const char* relativePath, bool binary, File* output);
 
 }
 

@@ -65,23 +65,23 @@ R"({
   fclose (outputFile);
 }
 
-Result readAsset (const char* relativePath, simdjson::ondemand::parser& parser, Asset& output) {
+Result readAsset (const char* relativePath, simdjson::ondemand::parser* parser, Asset* output) {
   FILE* assetFile = fopen (relativePath, "rb");
   if (!assetFile) return Result::FileDoesNotExist;
 
   size_t metadataSize = 0;
   fread (&metadataSize, sizeof (size_t), 1, assetFile);
 
-  output.metadata = MALLOC (char, metadataSize);
-  fread (output.metadata, 1, metadataSize, assetFile);
-  output.metadata[metadataSize] = '\0';
+  output->metadata = MALLOC (char, metadataSize);
+  fread (output->metadata, 1, metadataSize, assetFile);
+  output->metadata[metadataSize] = '\0';
 
-  simdjson::padded_string paddedMetadata {output.metadata, strlen (output.metadata)};
-  simdjson::ondemand::document metadata = parser.iterate (paddedMetadata);
-  output.size = SCAST <size_t> (metadata["binarySize"].get_uint64 ());
+  simdjson::padded_string paddedMetadata {output->metadata, strlen (output->metadata)};
+  simdjson::ondemand::document metadata = parser->iterate (paddedMetadata);
+  output->size = SCAST <size_t> (metadata["binarySize"].get_uint64 ());
 
-  output.data = MALLOC (char, output.size);
-  fread (output.data, 1, output.size, assetFile);
+  output->data = MALLOC (char, output->size);
+  fread (output->data, 1, output->size, assetFile);
 
   fclose (assetFile);
   return Result::Success;

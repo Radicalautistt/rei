@@ -9,13 +9,13 @@ void Camera::update () noexcept {
   front.y = sinf (math::radians (pitch));
   front.z = sinf (math::radians (yaw)) * cosf (math::radians (pitch));
 
-  math::Vector3::normalize (front);
+  math::Vector3::normalize (&front);
 
-  math::Vector3::crossProduct (front, worldUp, right);
-  math::Vector3::normalize (right);
+  math::Vector3::crossProduct (&front, &worldUp, &right);
+  math::Vector3::normalize (&right);
 
-  math::Vector3::crossProduct (right, front, up);
-  math::Vector3::normalize (up);
+  math::Vector3::crossProduct (&right, &front, &up);
+  math::Vector3::normalize (&up);
 }
 
 void Camera::handleMouseMovement (float x, float y) noexcept {

@@ -49,28 +49,27 @@ struct Model {
   vku::Buffer indexBuffer;
 
   void initDescriptorPool (VkDevice device);
-
   void initMaterialDescriptors (VkDevice device);
 
   void initPipelines (
     VkDevice device,
     VkRenderPass renderPass,
     VkPipelineCache pipelineCache,
-    const vku::Swapchain& swapchain
+    const vku::Swapchain* swapchain
   );
 
-  void draw (VkCommandBuffer commandBuffer, const math::Matrix4& mvp);
+  void draw (VkCommandBuffer commandBuffer, const math::Matrix4* mvp);
 };
 
-void loadModel (
+void load (
   VkDevice device,
   VmaAllocator allocator,
-  const vku::TransferContext& transferContext,
+  const vku::TransferContext* transferContext,
   const char* relativePath,
-  Model& output
+  Model* output
 );
 
-void destroyModel (VkDevice device, VmaAllocator allocator, Model& model);
+void destroy (VkDevice device, VmaAllocator allocator, Model* model);
 
 }
 
