@@ -18,13 +18,14 @@ struct Vertex {
 };
 
 struct Material {
-  uint32_t albedoIndex;
+  size_t albedoIndex;
   VkSampler albedoSampler;
   VkDescriptorSet descriptorSet;
   VkDescriptorSetLayout descriptorSetLayout;
 };
 
-struct Primitive {
+// This is used to group multiple primitives with the same material
+struct Batch {
   uint32_t firstIndex;
   uint32_t indexCount;
   uint32_t materialIndex;
@@ -37,13 +38,12 @@ struct Model {
   VkDescriptorPool descriptorPool;
 
   Material* materials;
-  uint32_t materialsCount;
+  size_t materialsCount;
 
-  Primitive* primitives;
-  uint32_t primitivesCount;
+  Batch* batches;
 
   vku::Image* textures;
-  uint32_t texturesCount;
+  size_t texturesCount;
 
   vku::Buffer vertexBuffer;
   vku::Buffer indexBuffer;

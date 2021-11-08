@@ -11,6 +11,39 @@
 
 namespace rei::gltf {
 
+// Sort primitives by material index so that it would be easier to merge
+// ones with the same material into batches.
+static void sortPrimitives (assets::gltf::Primitive* primitives, int low, int high) {
+  if (low >= 0 && high >= 0 && low < high) {
+    int pivotIndex = 0;
+    // NOTE The cast of (low + high) to unsigned is made because division of
+    // an unsigned integer by a constant is faster than that of a signed one.
+    // After that, unsigned is cast back into signed, because conversion to float
+    // is faster with signed integers. Also, casting signed->unsigned and vice versa is free.
+    // Reference: Agner Fog's Optimization Manual 1, page 30 and 40.
+    uint32_t middle = (uint32_t) floorf ((float) ((int32_t) ((uint32_t) (low + high) / 2u)));
+    uint32_t pivot = primitives[middle].material;
+
+    int left = low - 1;
+    int right = high + 1;
+
+    for (;;) {
+      do ++left; while (primitives[left].material < pivot);
+      do --right; while (primitives[right].material > pivot);
+
+      if (left >= right) {
+        pivotIndex = right;
+	break;
+      }
+
+      SWAP (&primitives[left], &primitives[right]);
+    }
+
+    sortPrimitives (primitives, low, pivotIndex);
+    sortPrimitives (primitives, pivotIndex + 1, high);
+  }
+}
+
 void load (
   VkDevice device,
   VmaAllocator allocator,
@@ -20,6 +53,7 @@ void load (
 
   assets::gltf::Data gltf;
   assets::gltf::load (relativePath, &gltf);
+  sortPrimitives (gltf.mesh.primitives, 0, (int) gltf.mesh.primitivesCount - 1);
 
   uint32_t vertexCount = 0, indexCount = 0;
 
@@ -29,24 +63,26 @@ void load (
     vertexCount += gltf.accessors[current->attributes.position].count;
   }
 
-  output->primitivesCount = SCAST <uint32_t> (gltf.mesh.primitivesCount);
-
   uint32_t vertexOffset = 0, indexOffset = 0;
-
   auto vertices = MALLOC (Vertex, vertexCount);
   auto indices = MALLOC (uint32_t, indexCount);
-  output->primitives = MALLOC (Primitive, output->primitivesCount);
 
-  #define GET_ACCESSOR(attribute, result) do {                                                   \
-    const auto accessor = &gltf.accessors[currentPrimitive->attributes.attribute];                \
-    const auto bufferView = &gltf.bufferViews[accessor->bufferView];                              \
-    result = RCAST <const float*> (&gltf.buffer[accessor->byteOffset + bufferView->byteOffset]); \
+  output->batches = MALLOC (Batch, gltf.materialsCount);
+
+  #define GET_ACCESSOR(attribute, result) do {                                             \
+    const auto accessor = &gltf.accessors[currentPrimitive->attributes.attribute];         \
+    const auto bufferView = &gltf.bufferViews[accessor->bufferView];                       \
+    result = (const float*) (&gltf.buffer[accessor->byteOffset + bufferView->byteOffset]); \
   } while (false)
+
+  uint32_t firstIndex = 0;
+  uint32_t batchOffset = 0;
+  uint32_t currentMaterial = 0;
+  uint32_t currentIndexCount = 0;
 
   for (size_t primitive = 0; primitive < gltf.mesh.primitivesCount; ++primitive) {
     const auto currentPrimitive = &gltf.mesh.primitives[primitive];
 
-    uint32_t firstIndex = indexOffset;
     uint32_t vertexStart = vertexOffset;
 
     const float* uvAccessor = nullptr;
@@ -57,30 +93,43 @@ void load (
     GET_ACCESSOR (normal, normalAccessor);
     GET_ACCESSOR (position, positionAccessor);
 
-    uint8_t uvStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec2);
-    uint8_t positionStride = assets::gltf::countComponents (assets::gltf::AccessorType::Vec3);
-
     uint32_t currentVertexCount = gltf.accessors[currentPrimitive->attributes.position].count;
 
     for (uint32_t vertex = 0; vertex < currentVertexCount; ++vertex) {
       auto newVertex = &vertices[vertexOffset++];
 
-      memcpy (&newVertex->u, &uvAccessor[vertex * uvStride], sizeof (float) * 2);
-      memcpy (&newVertex->nx, &normalAccessor[vertex * positionStride], sizeof (float) * 3);
-      memcpy (&newVertex->x, &positionAccessor[vertex * positionStride], sizeof (float) * 3);
+      memcpy (&newVertex->u, &uvAccessor[vertex * 2], sizeof (float) * 2);
+      memcpy (&newVertex->nx, &normalAccessor[vertex * 3], sizeof (float) * 3);
+      memcpy (&newVertex->x, &positionAccessor[vertex * 3], sizeof (float) * 3);
     }
 
     const auto accessor = &gltf.accessors[currentPrimitive->indices];
     const auto bufferView = &gltf.bufferViews[accessor->bufferView];
-    const auto indexAccessor = RCAST <const uint16_t*> (&gltf.buffer[accessor->byteOffset + bufferView->byteOffset]);
+    const auto indexAccessor = (const uint16_t*) &gltf.buffer[accessor->byteOffset + bufferView->byteOffset];
+
+    if (currentMaterial == currentPrimitive->material) {
+      currentIndexCount += accessor->count;
+    } else {
+      auto newBatch = &output->batches[batchOffset++];
+      newBatch->firstIndex = firstIndex;
+      newBatch->indexCount = currentIndexCount;
+      newBatch->materialIndex = currentMaterial;
+
+      firstIndex = indexOffset;
+      currentIndexCount = accessor->count;
+      currentMaterial = currentPrimitive->material;
+    }
+
+    // FIXME This is ugly
+    if (batchOffset == (gltf.materialsCount - 1)) {
+      auto newBatch = &output->batches[batchOffset];
+      newBatch->firstIndex = indexOffset;
+      newBatch->indexCount = currentIndexCount;
+      newBatch->materialIndex = currentMaterial;
+    }
 
     for (uint32_t index = 0; index < accessor->count; ++index)
       indices[indexOffset++] = indexAccessor[index] + vertexStart;
-
-    auto newPrimitive = &output->primitives[primitive];
-    newPrimitive->firstIndex = firstIndex;
-    newPrimitive->indexCount = accessor->count;
-    newPrimitive->materialIndex = currentPrimitive->material;
   }
 
   #undef GET_ACCESSOR
@@ -137,7 +186,7 @@ void load (
 
   free (indices);
 
-  output->texturesCount = SCAST <uint32_t> (gltf.imagesCount);
+  output->texturesCount = gltf.imagesCount;
   output->textures = MALLOC (vku::Image, gltf.imagesCount);
 
   simdjson::ondemand::parser parser;
@@ -159,16 +208,14 @@ void load (
     simdjson::padded_string paddedMetadata {asset.metadata, strlen (asset.metadata)};
     simdjson::ondemand::document metadata = parser.iterate (paddedMetadata);
 
-    uint32_t width = SCAST <uint32_t> (metadata["width"].get_uint64 ());
-    uint32_t height = SCAST <uint32_t> (metadata["height"].get_uint64 ());
-
     vku::TextureAllocationInfo allocationInfo;
-    allocationInfo.width = width;
-    allocationInfo.height = height;
     allocationInfo.compressed = true;
     allocationInfo.pixels = asset.data;
     allocationInfo.generateMipmaps = true;
     allocationInfo.compressedSize = asset.size;
+    allocationInfo.width = (uint32_t) metadata["width"].get_uint64 ();
+    allocationInfo.height = (uint32_t) metadata["height"].get_uint64 ();
+
 
     vku::allocateTexture (
       device,
@@ -182,7 +229,7 @@ void load (
     free (asset.metadata);
   }
 
-  output->materialsCount = SCAST <uint32_t> (gltf.materialsCount);
+  output->materialsCount = gltf.materialsCount;
   output->materials = MALLOC (Material, gltf.materialsCount);
 
   for (size_t index = 0; index < gltf.materialsCount; ++index)
@@ -198,7 +245,7 @@ void destroy (VkDevice device, VmaAllocator allocator, Model* model) {
   vmaDestroyBuffer (allocator, model->indexBuffer.handle, model->indexBuffer.allocation);
   vmaDestroyBuffer (allocator, model->vertexBuffer.handle, model->vertexBuffer.allocation);
 
-  for (uint32_t index = 0; index < model->materialsCount; ++index) {
+  for (size_t index = 0; index < model->materialsCount; ++index) {
     auto current = &model->materials[index];
     vkDestroySampler (device, current->albedoSampler, nullptr);
     vkDestroyDescriptorSetLayout (device, current->descriptorSetLayout, nullptr);
@@ -208,18 +255,18 @@ void destroy (VkDevice device, VmaAllocator allocator, Model* model) {
 
   vkDestroyDescriptorPool (device, model->descriptorPool, nullptr);
 
-  for (uint32_t index = 0; index < model->texturesCount; ++index) {
+  for (size_t index = 0; index < model->texturesCount; ++index) {
     auto current = &model->textures[index];
     vkDestroyImageView (device, current->view, nullptr);
     vmaDestroyImage (allocator, current->handle, current->allocation);
   }
 
   free (model->textures);
-  free (model->primitives);
+  free (model->batches);
 }
 
 void Model::initMaterialDescriptors (VkDevice device) {
-  for (uint32_t index = 0; index < materialsCount; ++index) {
+  for (size_t index = 0; index < materialsCount; ++index) {
     auto current = &materials[index];
 
     {
@@ -276,12 +323,12 @@ void Model::initMaterialDescriptors (VkDevice device) {
 }
 
 void Model::initDescriptorPool (VkDevice device) {
-  VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, texturesCount};
+  VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (uint32_t) texturesCount};
 
   VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
   createInfo.poolSizeCount = 1;
   createInfo.pPoolSizes = &poolSize;
-  createInfo.maxSets = materialsCount;
+  createInfo.maxSets = (uint32_t) materialsCount;
 
   VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &descriptorPool));
 }
@@ -354,8 +401,8 @@ void Model::initPipelines (
   viewport.y = 0.f;
   viewport.minDepth = 0.f;
   viewport.maxDepth = 1.f;
-  viewport.width = SCAST <float> (swapchain->extent.width);
-  viewport.height = SCAST <float> (swapchain->extent.height);
+  viewport.width = (float) swapchain->extent.width;
+  viewport.height = (float) swapchain->extent.height;
 
   VkPipelineViewportStateCreateInfo viewportInfo {PIPELINE_VIEWPORT_STATE_CREATE_INFO};
   viewportInfo.scissorCount = 1;
@@ -426,8 +473,8 @@ void Model::draw (VkCommandBuffer commandBuffer, const math::Matrix4* mvp) {
 
   vkCmdPushConstants (commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Matrix4), mvp);
 
-  for (uint32_t index = 0; index < primitivesCount; ++index) {
-    const auto current = &primitives[index];
+  for (size_t index = 0; index < materialsCount; ++index) {
+    const auto current = &batches[index];
 
     vkCmdBindDescriptorSets (
       commandBuffer,

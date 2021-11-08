@@ -77,6 +77,14 @@
 #  define RCAST reinterpret_cast
 #endif
 
+#ifndef SWAP
+#  define SWAP(a, b) do { \
+     auto temp = *a;      \
+     *a = *b;             \
+     *b = temp;           \
+   } while (0)
+#endif
+
 #ifndef MIN
 #  define MIN(a, b) (((a) > (b)) ? (b) : (a))
 #endif
