@@ -6,7 +6,7 @@
 
 namespace rei::assets::gltf {
 
-enum class AccessorComponentType : uint8_t {
+enum class AccessorComponentType : uint32_t {
   Int8,
   Int16,
   Float,
@@ -17,7 +17,7 @@ enum class AccessorComponentType : uint8_t {
   Unknown
 };
 
-enum class AccessorType : uint8_t {
+enum class AccessorType : uint32_t {
   Vec2,
   Vec3,
   Vec4,
@@ -29,7 +29,7 @@ enum class AccessorType : uint8_t {
   Unknown
 };
 
-enum class TopologyType : uint8_t {
+enum class TopologyType : uint32_t {
   Lines,
   Points,
   LineLoop,
@@ -41,7 +41,7 @@ enum class TopologyType : uint8_t {
   Unknown
 };
 
-enum class AlphaMode : uint8_t {
+enum class AlphaMode : uint32_t {
   Mask,
   Blend,
   Opaque,
@@ -80,17 +80,10 @@ struct Texture {
   uint32_t source;
 };
 
-struct TextureInfo {
-  uint32_t index;
-};
-
-struct PbrMetallicRoughness {
-  TextureInfo baseColorTexture;
-};
-
 struct Material {
   AlphaMode alphaMode;
-  PbrMetallicRoughness pbrMetallicRoughness;
+  // PBR metallic rougness
+  uint32_t baseColorTexture;
 };
 
 struct Primitive {

@@ -378,7 +378,7 @@ int main () {
     xcb_generic_event_t* event = nullptr;
 
     while (running) {
-      camera.firstMouse = true;
+      camera.firstMouse = True;
       float currentTime = rei::utils::Timer::getCurrentTime ();
       deltaTime = currentTime - lastTime;
       lastTime = currentTime;

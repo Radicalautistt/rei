@@ -74,11 +74,11 @@ struct GraphicsPipelineCreateInfo {
 };
 
 struct BufferAllocationInfo {
-  VkDeviceSize size;
-
   VkBufferUsageFlags bufferUsage;
   uint32_t memoryUsage;
   VkMemoryPropertyFlags requiredFlags;
+
+  VkDeviceSize size;
 };
 
 struct TransferContext {
@@ -102,7 +102,7 @@ struct ImageLayoutTransitionInfo {
 };
 
 struct TextureAllocationInfo {
-  bool compressed, generateMipmaps;
+  Bool32 compressed, generateMipmaps;
   uint32_t width, height;
   const char* pixels;
   size_t compressedSize;

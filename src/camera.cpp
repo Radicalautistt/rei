@@ -22,7 +22,7 @@ void Camera::handleMouseMovement (float x, float y) noexcept {
   if (firstMouse) {
     lastX = x;
     lastY = y;
-    firstMouse = false;
+    firstMouse = False;
   }
 
   float xOffset = x - lastX, yOffset = lastY - y;

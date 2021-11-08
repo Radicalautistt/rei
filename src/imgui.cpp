@@ -198,12 +198,12 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     io.Fonts->GetTexDataAsRGBA32 (&pixels, &width, &height);
 
     vku::TextureAllocationInfo allocationInfo;
-    allocationInfo.compressed = false;
+    allocationInfo.compressed = False;
     allocationInfo.compressedSize = 0;
-    allocationInfo.generateMipmaps = false;
-    allocationInfo.width = SCAST <uint32_t> (width);
-    allocationInfo.height = SCAST <uint32_t> (height);
-    allocationInfo.pixels = RCAST <const char*> (pixels);
+    allocationInfo.generateMipmaps = False;
+    allocationInfo.width = (uint32_t) width;
+    allocationInfo.height = (uint32_t) height;
+    allocationInfo.pixels = (const char*) pixels;
 
     vku::allocateTexture (
       output->device,
@@ -213,10 +213,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
       &output->fontTexture
     );
 
-    ImTextureID fontID = RCAST <ImTextureID>
-      (RCAST <intptr_t> (output->fontTexture.handle));
-
-    io.Fonts->SetTexID (fontID);
+    io.Fonts->SetTexID ((ImTextureID) ((intptr_t) output->fontTexture.handle));
   }
 
   { // Create font sampler

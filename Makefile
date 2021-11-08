@@ -1,13 +1,12 @@
 rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
 
-includePaths = -I third-party/
+includePaths = -isystem third-party/
 linkPaths = -L third-party/lz4/lib/
 linkPaths += -L third-party/imgui/
 linkPaths += -L third-party/simdjson/
-linkPaths += -L third-party/VulkanMemoryAllocator/build/src/
-links = -ldl -lm -lxcb -llz4 -lIMGUI -lSimdjson -lVulkanMemoryAllocator
+links = -ldl -lm -lxcb -llz4 -lIMGUI -lSimdjson
 
-flags = -std=c++17 -Wall -Wextra -Wconversion -Og -march=native -Wno-missing-field-initializers -g
+flags = -std=c++17 -Wall -Wextra -Wpadded -Wconversion -Og -march=native -Wno-missing-field-initializers -g
 sourceFiles = $(call rwildcard, src, *.cpp, *.hpp, *.h)
 objectFiles = $(patsubst src/%.cpp, obj/%.o, $(sourceFiles))
 

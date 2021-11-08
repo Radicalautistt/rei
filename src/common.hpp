@@ -6,6 +6,18 @@
 #include <stdint.h>
 #include <x86intrin.h>
 
+typedef unsigned int Uint32;
+
+typedef Uint32 Bool32;
+
+#ifndef True
+#  define True 1u
+#endif
+
+#ifndef False
+#  define False 0u
+#endif
+
 #ifndef ANSI_RESET
 #  define ANSI_RESET "\033[;0m"
 #endif

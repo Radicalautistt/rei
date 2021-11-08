@@ -5,6 +5,7 @@
 #include "common.hpp"
 #include "utils.hpp"
 
+#pragma message "REMOVE THIS ASAP, 25 SECONDS OF COMPILATION TIME OF A SINGLE UNIT IS NO JOKE"
 #include <simdjson/simdjson.h>
 
 namespace rei::assets::gltf {
@@ -91,7 +92,7 @@ void load (const char* relativePath, Data* output) {
     REI_CHECK (utils::readFile (binaryPath, true, &binaryFile));
 
     output->buffer = MALLOC (uint8_t, binaryFile.size);
-    memcpy (output->buffer, SCAST <uint8_t*> (binaryFile.contents), binaryFile.size);
+    memcpy (output->buffer, (uint8_t*) binaryFile.contents, binaryFile.size);
 
     free (binaryFile.contents);
   }
@@ -111,9 +112,9 @@ void load (const char* relativePath, Data* output) {
     size_t index = 0;
     for (auto bufferView : parsedGLTF["bufferViews"].get_array ()) {
       auto newBufferView = &output->bufferViews[index++];
-      newBufferView->buffer = SCAST <uint32_t> (bufferView["buffer"].get_uint64 ());
-      newBufferView->byteLength = SCAST <uint32_t> (bufferView["byteLength"].get_uint64 ());
-      newBufferView->byteOffset = SCAST <uint32_t> (bufferView["byteOffset"].get_uint64 ());
+      newBufferView->buffer = (uint32_t) bufferView["buffer"].get_uint64 ();
+      newBufferView->byteLength = (uint32_t) bufferView["byteLength"].get_uint64 ();
+      newBufferView->byteOffset = (uint32_t) bufferView["byteOffset"].get_uint64 ();
     }
   }
 
@@ -129,9 +130,9 @@ void load (const char* relativePath, Data* output) {
 
       auto newAccessor = &output->accessors[index++];
       newAccessor->type = parseAccessorType (accessorType);
-      newAccessor->count = SCAST <uint32_t> (accessor["count"].get_uint64 ());
-      newAccessor->bufferView = SCAST <uint32_t> (accessor["bufferView"].get_uint64 ());
-      newAccessor->byteOffset = SCAST <uint32_t> (accessor["byteOffset"].get_uint64 ());
+      newAccessor->count = (uint32_t) accessor["count"].get_uint64 ();
+      newAccessor->bufferView = (uint32_t) accessor["bufferView"].get_uint64 ();
+      newAccessor->byteOffset = (uint32_t) accessor["byteOffset"].get_uint64 ();
       newAccessor->componentType = parseAccessorComponentType (accessor["componentType"].get_uint64 ());
     }
   }
@@ -141,9 +142,9 @@ void load (const char* relativePath, Data* output) {
     output->mesh.primitivesCount = jsonArraySize (defaultMesh["primitives"]);
     output->mesh.primitives = MALLOC (Primitive, output->mesh.primitivesCount);
 
-    #define GET_ATTRIBUTE(name, fieldName) do {                                                     \
-      auto result = primitive["attributes"][name];                                                  \
-      if (result.error () == simdjson::SUCCESS)                                                     \
+    #define GET_ATTRIBUTE(name, fieldName) do {                                                      \
+      auto result = primitive["attributes"][name];                                                   \
+      if (result.error () == simdjson::SUCCESS)                                                      \
         newPrimitive->attributes.fieldName = (uint32_t) primitive["attributes"][name].get_uint64 (); \
     } while (false)
 
@@ -156,8 +157,8 @@ void load (const char* relativePath, Data* output) {
       GET_ATTRIBUTE ("POSITION", position);
 
       newPrimitive->mode = parsePrimitiveMode (primitive["mode"].get_uint64 ());
-      newPrimitive->indices = SCAST <uint32_t> (primitive["indices"].get_uint64 ());
-      newPrimitive->material = SCAST <uint32_t> (primitive["material"].get_uint64 ());
+      newPrimitive->indices = (uint32_t) primitive["indices"].get_uint64 ();
+      newPrimitive->material = (uint32_t) primitive["material"].get_uint64 ();
     }
 
     #undef GET_ATTRIBUTE
@@ -189,7 +190,7 @@ void load (const char* relativePath, Data* output) {
     size_t index = 0;
     for (auto texture : parsedGLTF["textures"].get_array ()) {
       auto newTexture = &output->textures[index++];
-      newTexture->source = SCAST <uint32_t> (texture["source"].get_uint64 ());
+      newTexture->source = (uint32_t) texture["source"].get_uint64 ();
     }
   }
 
@@ -202,21 +203,21 @@ void load (const char* relativePath, Data* output) {
       auto newMaterial = &output->materials[index++];
 
       {
-      auto result = material["alphaMode"];
-        if (result.error () != simdjson::SUCCESS) {
-          newMaterial->alphaMode = AlphaMode::Opaque;
-        } else {
-          char alphaMode[7] {};
+        auto result = material["alphaMode"];
+          if (result.error () != simdjson::SUCCESS) {
+            newMaterial->alphaMode = AlphaMode::Opaque;
+          } else {
+            char alphaMode[7] {};
 
-          std::string_view alphaModeView = result.value_unsafe ();
-          strncpy (alphaMode, alphaModeView.data (), alphaModeView.size ());
+            std::string_view alphaModeView = result.value_unsafe ();
+            strncpy (alphaMode, alphaModeView.data (), alphaModeView.size ());
 
-          newMaterial->alphaMode = parseAlphaMode (alphaMode);
-        }
+            newMaterial->alphaMode = parseAlphaMode (alphaMode);
+          }
       }
 
-      newMaterial->pbrMetallicRoughness.baseColorTexture.index =
-	SCAST <uint32_t> (material["pbrMetallicRoughness"]["baseColorTexture"]["index"].get_uint64());
+      newMaterial->baseColorTexture =
+	(uint32_t) material["pbrMetallicRoughness"]["baseColorTexture"]["index"].get_uint64();
     }
   }
 }

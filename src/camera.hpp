@@ -2,6 +2,7 @@
 #define CAMERA_HPP
 
 #include "math.hpp"
+#include "common.hpp"
 
 namespace rei {
 
@@ -13,7 +14,7 @@ struct Camera {
     Backward,
   };
 
-  bool firstMouse;
+  Bool32 firstMouse;
   float zoom, speed, sensitivity;
   float zFar, yaw, pitch, lastX, lastY;
 

@@ -209,9 +209,9 @@ void load (
     simdjson::ondemand::document metadata = parser.iterate (paddedMetadata);
 
     vku::TextureAllocationInfo allocationInfo;
-    allocationInfo.compressed = true;
+    allocationInfo.compressed = True;
     allocationInfo.pixels = asset.data;
-    allocationInfo.generateMipmaps = true;
+    allocationInfo.generateMipmaps = True;
     allocationInfo.compressedSize = asset.size;
     allocationInfo.width = (uint32_t) metadata["width"].get_uint64 ();
     allocationInfo.height = (uint32_t) metadata["height"].get_uint64 ();
@@ -233,8 +233,7 @@ void load (
   output->materials = MALLOC (Material, gltf.materialsCount);
 
   for (size_t index = 0; index < gltf.materialsCount; ++index)
-    output->materials[index].albedoIndex =
-      gltf.materials[index].pbrMetallicRoughness.baseColorTexture.index;
+    output->materials[index].albedoIndex = gltf.materials[index].baseColorTexture;
 
   assets::gltf::destroy (&gltf);
 }
