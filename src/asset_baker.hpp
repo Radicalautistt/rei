@@ -17,6 +17,7 @@ struct Asset {
 };
 
 void bakeImage (const char* relativePath);
+void bakeImages (const char* relativePath);
 Result readAsset (const char* relativePath, simdjson::ondemand::parser* parser, Asset* output);
 
 }

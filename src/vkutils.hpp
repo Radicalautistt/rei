@@ -102,7 +102,8 @@ struct ImageLayoutTransitionInfo {
 };
 
 struct TextureAllocationInfo {
-  Bool32 compressed, generateMipmaps;
+  Bool32 compressed;
+  uint32_t mipLevels;
   uint32_t width, height;
   const char* pixels;
   size_t compressedSize;

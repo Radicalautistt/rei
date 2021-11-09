@@ -211,11 +211,10 @@ void load (
     vku::TextureAllocationInfo allocationInfo;
     allocationInfo.compressed = True;
     allocationInfo.pixels = asset.data;
-    allocationInfo.generateMipmaps = True;
     allocationInfo.compressedSize = asset.size;
     allocationInfo.width = (uint32_t) metadata["width"].get_uint64 ();
     allocationInfo.height = (uint32_t) metadata["height"].get_uint64 ();
-
+    allocationInfo.mipLevels = (uint32_t) metadata["mipLevels"].get_uint64 ();
 
     vku::allocateTexture (
       device,

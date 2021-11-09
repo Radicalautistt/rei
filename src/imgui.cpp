@@ -198,9 +198,9 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     io.Fonts->GetTexDataAsRGBA32 (&pixels, &width, &height);
 
     vku::TextureAllocationInfo allocationInfo;
+    allocationInfo.mipLevels = 1;
     allocationInfo.compressed = False;
     allocationInfo.compressedSize = 0;
-    allocationInfo.generateMipmaps = False;
     allocationInfo.width = (uint32_t) width;
     allocationInfo.height = (uint32_t) height;
     allocationInfo.pixels = (const char*) pixels;
