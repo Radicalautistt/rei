@@ -170,6 +170,11 @@ typedef Uint32 Bool32;
    } while (0)
 #endif
 
+// Count of frames in flight
+#ifndef FRAMES_COUNT
+#  define FRAMES_COUNT 2u
+#endif
+
 namespace rei {
 
 enum LogLevel : uint8_t {

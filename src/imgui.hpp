@@ -44,22 +44,24 @@ struct Context {
   VkDescriptorSet descriptorSet;
   VkSampler fontSampler;
 
+  VkFence bufferUpdateFence;
+
   xcb::Window* window;
   vku::TransferContext* transferContext;
 
-  vku::Buffer indexBuffer;
-  vku::Buffer vertexBuffer;
+  vku::Buffer indexBuffers[FRAMES_COUNT];
+  vku::Buffer vertexBuffers[FRAMES_COUNT];
 
   vku::Image fontTexture;
 
   void newFrame ();
-  void updateBuffers (const ImDrawData* drawData);
+  void updateBuffers (uint32_t frameIndex, const ImDrawData* drawData);
   void handleEvents (const xcb_generic_event_t* event);
-  void renderDrawData (const ImDrawData* drawData, VkCommandBuffer commandBuffer);
+  void renderDrawData (VkCommandBuffer commandBuffer, uint32_t frameIndex, const ImDrawData* drawData);
 };
 
 void create (const ContextCreateInfo* createInfo, Context* output);
-void destroy (VkDevice device, VmaAllocator allocator, Context* context);
+void destroy (Context* context);
 
 };
 

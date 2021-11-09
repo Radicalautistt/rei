@@ -15,8 +15,6 @@
 #include <imgui/imgui.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
-#define FRAMES_COUNT 2u
-
 struct Frame {
   VkCommandPool commandPool;
   VkCommandBuffer commandBuffer;
@@ -97,7 +95,6 @@ int main () {
 
     #ifndef NDEBUG
     auto debugMessengerInfo = rei::vki::debugMessengerInfo ();
-
     const char* validationLayers[] {"VK_LAYER_KHRONOS_validation"};
 
     createInfo.enabledLayerCount = 1;
@@ -365,7 +362,6 @@ int main () {
   }
 
   rei::gltf::load (device, allocator, &transferContext, "assets/models/sponza-scene/Sponza.gltf", &sponza);
-
   sponza.initDescriptorPool (device);
   sponza.initMaterialDescriptors (device);
   sponza.initPipelines (device, renderPass, pipelineCache, &swapchain);
@@ -387,7 +383,7 @@ int main () {
       while ((event = xcb_poll_for_event (window.connection))) {
 	switch (event->response_type & ~0x80) {
 	  case XCB_KEY_PRESS: {
-	    auto key = RCAST <xcb_key_press_event_t*> (event);
+	    const auto key = (const xcb_key_press_event_t*) event;
 	    if (key->detail == 9) running = false;
 	    if (key->detail == 38) camera.move (rei::Camera::Direction::Left, deltaTime);
 	    if (key->detail == 40) camera.move (rei::Camera::Direction::Right, deltaTime);
@@ -396,8 +392,8 @@ int main () {
           } break;
 
 	  case XCB_MOTION_NOTIFY: {
-	    auto data = RCAST <xcb_motion_notify_event_t*> (event);
-	    camera.handleMouseMovement (SCAST <float> (data->event_x), SCAST <float> (data->event_y));
+	    const auto data = (const xcb_motion_notify_event_t*) event;
+	    camera.handleMouseMovement ((float) data->event_x, (float) data->event_y);
 	  } break;
 
 	  default: break;
@@ -408,7 +404,8 @@ int main () {
 	free (event);
       }
 
-      const auto currentFrame = &frames[frameIndex % FRAMES_COUNT];
+      frameIndex %= FRAMES_COUNT;
+      const auto currentFrame = &frames[frameIndex];
 
       VK_CHECK (vkWaitForFences (device, 1, &currentFrame->renderFence, VK_TRUE, ~0ull));
       VK_CHECK (vkResetFences (device, 1, &currentFrame->renderFence));
@@ -454,8 +451,8 @@ int main () {
         ImGui::ShowMetricsWindow ();
         ImGui::Render ();
         const ImDrawData* drawData = ImGui::GetDrawData ();
-        imguiContext.updateBuffers (drawData);
-        imguiContext.renderDrawData (drawData, currentFrame->commandBuffer);
+        imguiContext.updateBuffers (frameIndex, drawData);
+        imguiContext.renderDrawData (currentFrame->commandBuffer, frameIndex, drawData);
       }
 
       vkCmdEndRenderPass (currentFrame->commandBuffer);
@@ -486,9 +483,6 @@ int main () {
 
       VK_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
       ++frameIndex;
-      // Wait for commands sent to the current frame's command buffer to finish,
-      // so that we can safely destroy/update dynamic buffers in the next frame.
-      vkQueueWaitIdle (graphicsQueue);
     }
   }
 
@@ -496,7 +490,7 @@ int main () {
   vkDeviceWaitIdle (device);
 
   rei::gltf::destroy (device, allocator, &sponza);
-  rei::imgui::destroy (device, allocator, &imguiContext);
+  rei::imgui::destroy (&imguiContext);
 
   { // Save pipeline cache for future reuse
     size_t size = 0;

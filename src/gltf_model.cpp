@@ -309,7 +309,7 @@ void Model::initMaterialDescriptors (VkDevice device) {
     albedoInfo.imageView = textures[current->albedoIndex].view;
     albedoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    VkWriteDescriptorSet write {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    VkWriteDescriptorSet write {WRITE_DESCRIPTOR_SET};
     write.dstBinding = 0;
     write.descriptorCount = 1;
     write.pImageInfo = &albedoInfo;

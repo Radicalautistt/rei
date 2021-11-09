@@ -10,7 +10,7 @@ namespace rei::imgui {
 
 static bool mouseButtonsDown[2];
 
-void Context::updateBuffers (const ImDrawData* drawData) {
+void Context::updateBuffers (uint32_t frameIndex, const ImDrawData* drawData) {
   if (drawData->TotalVtxCount) {
     counts.index = drawData->TotalIdxCount;
     counts.vertex = drawData->TotalVtxCount;
@@ -18,11 +18,11 @@ void Context::updateBuffers (const ImDrawData* drawData) {
     VkDeviceSize indexBufferSize = sizeof (ImDrawIdx) * counts.index;
     VkDeviceSize vertexBufferSize = sizeof (ImDrawVert) * counts.vertex;
 
-    if (vertexBuffer.size < vertexBufferSize) {
-      if (vertexBuffer.allocation) {
-        vmaUnmapMemory (allocator, vertexBuffer.allocation);
-        vmaDestroyBuffer (allocator, vertexBuffer.handle, vertexBuffer.allocation);
-      }
+    auto vertexBuffer = &vertexBuffers[frameIndex];
+
+    if (vertexBuffer->size < vertexBufferSize) {
+      vmaUnmapMemory (allocator, vertexBuffer->allocation);
+      vmaDestroyBuffer (allocator, vertexBuffer->handle, vertexBuffer->allocation);
 
       vku::BufferAllocationInfo allocationInfo;
       allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -32,15 +32,15 @@ void Context::updateBuffers (const ImDrawData* drawData) {
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
       allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-      vku::allocateBuffer (allocator, &allocationInfo, &vertexBuffer);
-      VK_CHECK (vmaMapMemory (allocator, vertexBuffer.allocation, &vertexBuffer.mapped));
+      vku::allocateBuffer (allocator, &allocationInfo, vertexBuffer);
+      VK_CHECK (vmaMapMemory (allocator, vertexBuffer->allocation, &vertexBuffer->mapped));
     }
 
-    if (indexBuffer.size < indexBufferSize) {
-      if (indexBuffer.allocation) {
-        vmaUnmapMemory (allocator, indexBuffer.allocation);
-        vmaDestroyBuffer (allocator, indexBuffer.handle, indexBuffer.allocation);
-      }
+    auto indexBuffer = &indexBuffers[frameIndex];
+
+    if (indexBuffer->size < indexBufferSize) {
+      vmaUnmapMemory (allocator, indexBuffer->allocation);
+      vmaDestroyBuffer (allocator, indexBuffer->handle, indexBuffer->allocation);
 
       vku::BufferAllocationInfo allocationInfo;
       allocationInfo.size = sizeof (ImDrawIdx) * counts.index;
@@ -50,12 +50,12 @@ void Context::updateBuffers (const ImDrawData* drawData) {
       allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
       allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-      vku::allocateBuffer (allocator, &allocationInfo, &indexBuffer);
-      VK_CHECK (vmaMapMemory (allocator, indexBuffer.allocation, &indexBuffer.mapped));
+      vku::allocateBuffer (allocator, &allocationInfo, indexBuffer);
+      VK_CHECK (vmaMapMemory (allocator, indexBuffer->allocation, &indexBuffer->mapped));
     }
 
-    auto indices = RCAST <ImDrawIdx*> (indexBuffer.mapped);
-    auto vertices = RCAST <ImDrawVert*> (vertexBuffer.mapped);
+    auto indices = (ImDrawIdx*) indexBuffer->mapped;
+    auto vertices = (ImDrawVert*) vertexBuffer->mapped;
 
     for (int index = 0; index < drawData->CmdListsCount; ++index) {
       const ImDrawList* current = drawData->CmdLists[index];
@@ -69,7 +69,7 @@ void Context::updateBuffers (const ImDrawData* drawData) {
 
     VkDeviceSize offsets[2] {0, 0};
     VkDeviceSize sizes[2] {vertexBufferSize, indexBufferSize};
-    VmaAllocation allocations[2] {vertexBuffer.allocation, indexBuffer.allocation};
+    VmaAllocation allocations[2] {vertexBuffer->allocation, indexBuffer->allocation};
 
     VK_CHECK (vmaFlushAllocations (allocator, 2, allocations, offsets, sizes));
   }
@@ -94,7 +94,7 @@ void Context::handleEvents (const xcb_generic_event_t* event) {
 
   switch (event->response_type & ~0x80) {
     case XCB_BUTTON_PRESS: {
-      const auto button = RCAST <const xcb_button_press_event_t*> (event);
+      const auto button = (const xcb_button_press_event_t*) event;
       if (button->detail == 1) mouseButtonsDown[0] = true;
       if (button->detail == 3) mouseButtonsDown[1] = true;
     } break;
@@ -102,7 +102,7 @@ void Context::handleEvents (const xcb_generic_event_t* event) {
   }
 }
 
-void Context::renderDrawData (const ImDrawData* drawData, VkCommandBuffer commandBuffer) {
+void Context::renderDrawData (VkCommandBuffer commandBuffer, uint32_t frameIndex, const ImDrawData* drawData) {
   vkCmdBindDescriptorSets (
     commandBuffer,
     VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -144,8 +144,8 @@ void Context::renderDrawData (const ImDrawData* drawData, VkCommandBuffer comman
     int32_t vertexOffset = 0;
     uint32_t indexOffset = 0;
 
-    vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffer.handle, &offset);
-    vkCmdBindIndexBuffer (commandBuffer, indexBuffer.handle, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffers[frameIndex].handle, &offset);
+    vkCmdBindIndexBuffer (commandBuffer, indexBuffers[frameIndex].handle, 0, VK_INDEX_TYPE_UINT16);
 
     for (int32_t list = 0; list < drawData->CmdListsCount; ++list) {
       const ImDrawList* commandList = drawData->CmdLists[list];
@@ -154,10 +154,10 @@ void Context::renderDrawData (const ImDrawData* drawData, VkCommandBuffer comman
 	const ImDrawCmd* drawCommand = &commandList->CmdBuffer[command];
 
 	VkRect2D scissor;
-	scissor.offset.x = MAX (SCAST <int32_t> (drawCommand->ClipRect.x), 0);
-	scissor.offset.y = MAX (SCAST <int32_t> (drawCommand->ClipRect.y), 0);
-	scissor.extent.width = SCAST <uint32_t> (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
-	scissor.extent.height = SCAST <uint32_t> (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
+	scissor.offset.x = MAX ((int32_t) drawCommand->ClipRect.x, 0);
+	scissor.offset.y = MAX ((int32_t) drawCommand->ClipRect.y, 0);
+	scissor.extent.width = (uint32_t) (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
+	scissor.extent.height = (uint32_t) (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
 
 	vkCmdSetScissor (commandBuffer, 0, 1, &scissor);
 
@@ -184,12 +184,28 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
   output->allocator = createInfo->allocator;
   output->transferContext = createInfo->transferContext;
 
-  output->indexBuffer.size = 0;
-  output->vertexBuffer.size = 0;
-  output->indexBuffer.handle = VK_NULL_HANDLE;
-  output->vertexBuffer.handle = VK_NULL_HANDLE;
-  output->indexBuffer.allocation = VK_NULL_HANDLE;
-  output->vertexBuffer.allocation = VK_NULL_HANDLE;
+  // Create dummy vertex and index buffers for each frame.
+  for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
+    auto indexBuffer = &output->indexBuffers[index];
+    auto vertexBuffer = &output->vertexBuffers[index];
+
+    vku::BufferAllocationInfo allocationInfo;
+    allocationInfo.size = 1;
+    allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    allocationInfo.bufferUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    vku::allocateBuffer (output->allocator, &allocationInfo, vertexBuffer);
+    VK_CHECK (vmaMapMemory (output->allocator, vertexBuffer->allocation, &vertexBuffer->mapped));
+
+    allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+
+    vku::allocateBuffer (output->allocator, &allocationInfo, indexBuffer);
+    VK_CHECK (vmaMapMemory (output->allocator, indexBuffer->allocation, &indexBuffer->mapped));
+  }
 
   { // Create font texture
     int width, height;
@@ -385,6 +401,13 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     );
   }
 
+  {
+    VkFenceCreateInfo createInfo {FENCE_CREATE_INFO};
+    createInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    VK_CHECK (vkCreateFence (output->device, &createInfo, nullptr, &output->bufferUpdateFence));
+  }
+
   ImGuiIO& io = ImGui::GetIO ();
   io.BackendRendererName = "Rei";
   io.BackendPlatformName = "Xcb";
@@ -402,23 +425,23 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
   style.Colors[ImGuiCol_TitleBgActive] = {0.f, 0.f, 0.f, 1.f};
 }
 
-void destroy (VkDevice device, VmaAllocator allocator, Context* context) {
-  if (context->indexBuffer.allocation) {
-    vmaUnmapMemory (allocator, context->indexBuffer.allocation);
-    vmaDestroyBuffer (allocator, context->indexBuffer.handle, context->indexBuffer.allocation);
+void destroy (Context* context) {
+  vkDestroyFence (context->device, context->bufferUpdateFence, nullptr);
+
+  for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
+    vmaUnmapMemory (context->allocator, context->indexBuffers[index].allocation);
+    vmaDestroyBuffer (context->allocator, context->indexBuffers[index].handle, context->indexBuffers[index].allocation);
+
+    vmaUnmapMemory (context->allocator, context->vertexBuffers[index].allocation);
+    vmaDestroyBuffer (context->allocator, context->vertexBuffers[index].handle, context->vertexBuffers[index].allocation);
   }
 
-  if (context->vertexBuffer.allocation) {
-    vmaUnmapMemory (allocator, context->vertexBuffer.allocation);
-    vmaDestroyBuffer (allocator, context->vertexBuffer.handle, context->vertexBuffer.allocation);
-  }
-
-  vkDestroyPipelineLayout (device, context->pipelineLayout, nullptr);
-  vkDestroyPipeline (device, context->pipeline, nullptr);
-  vkDestroyDescriptorSetLayout (device, context->descriptorSetLayout, nullptr);
-  vkDestroySampler (device, context->fontSampler, nullptr);
-  vkDestroyImageView (device, context->fontTexture.view, nullptr);
-  vmaDestroyImage (allocator, context->fontTexture.handle, context->fontTexture.allocation);
+  vkDestroyPipelineLayout (context->device, context->pipelineLayout, nullptr);
+  vkDestroyPipeline (context->device, context->pipeline, nullptr);
+  vkDestroyDescriptorSetLayout (context->device, context->descriptorSetLayout, nullptr);
+  vkDestroySampler (context->device, context->fontSampler, nullptr);
+  vkDestroyImageView (context->device, context->fontTexture.view, nullptr);
+  vmaDestroyImage (context->allocator, context->fontTexture.handle, context->fontTexture.allocation);
 
   ImGuiIO& io = ImGui::GetIO ();
   io.BackendPlatformName = nullptr;
