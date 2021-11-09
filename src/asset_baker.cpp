@@ -3,7 +3,6 @@
 #include <string.h>
 #include <dirent.h>
 
-#include "common.hpp"
 #include "asset_baker.hpp"
 
 #include <lz4/lib/lz4.h>
@@ -14,7 +13,7 @@
 namespace rei::assets {
 
 void bakeImage (const char* relativePath) {
-  int width, height, channels;
+  Int32 width, height, channels;
   auto pixels = stbi_load (relativePath, &width, &height, &channels, STBI_rgb_alpha);
   LOGS_WARNING (relativePath);
   REI_ASSERT (pixels);
@@ -26,26 +25,26 @@ void bakeImage (const char* relativePath) {
 
   FILE* outputFile = fopen (outputPath, "wb");
 
-  int resultSize = 0;
-  int originalSize = width * height * 4;
-  uint32_t mipLevels = (uint32_t) floorf (log2f ((float) MAX (width, height))) + 1;
+  Int32 resultSize = 0;
+  Int32 originalSize = width * height * 4;
+  Uint32 mipLevels = (Uint32) floorf (log2f ((Float32) MAX (width, height))) + 1;
 
   auto mipSizes = ALLOCA (size_t, mipLevels);
 
   // Calculate resulting image size, which contains all mip levels
-  for (uint32_t mipLevel = 0; mipLevel < mipLevels; ++mipLevel) {
+  for (Uint32 mipLevel = 0; mipLevel < mipLevels; ++mipLevel) {
     // Cache sizes
     mipSizes[mipLevel] = (width >> mipLevel) * (height >> mipLevel) * 4;
-    resultSize += (int) mipSizes[mipLevel];
+    resultSize += (Int32) mipSizes[mipLevel];
   }
 
-  uint8_t* resultImage = MALLOC (uint8_t, (size_t) resultSize);
+  Uint8* resultImage = MALLOC (Uint8, (size_t) resultSize);
 
   size_t mipOffset = 0;
   memcpy (resultImage, pixels, originalSize);
   mipOffset += (size_t) originalSize;
 
-  for (uint32_t mipLevel = 1; mipLevel < mipLevels; ++mipLevel) {
+  for (Uint32 mipLevel = 1; mipLevel < mipLevels; ++mipLevel) {
     stbir_resize_uint8 (
       pixels,
       width,
@@ -64,9 +63,9 @@ void bakeImage (const char* relativePath) {
   stbi_image_free (pixels);
 
   char* compressed = MALLOC (char, originalSize);
-  int compressedBound = LZ4_compressBound (resultSize);
+  Int32 compressedBound = LZ4_compressBound (resultSize);
 
-  int compressedActual = LZ4_compress_default (
+  Int32 compressedActual = LZ4_compress_default (
     (const char*) resultImage,
     compressed,
     resultSize,

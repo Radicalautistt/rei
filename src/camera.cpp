@@ -1,5 +1,3 @@
-#include <stdio.h>
-
 #include "camera.hpp"
 
 namespace rei {
@@ -18,14 +16,14 @@ void Camera::update () noexcept {
   math::Vector3::normalize (&up);
 }
 
-void Camera::handleMouseMovement (float x, float y) noexcept {
+void Camera::handleMouseMovement (Float32 x, Float32 y) noexcept {
   if (firstMouse) {
     lastX = x;
     lastY = y;
     firstMouse = False;
   }
 
-  float xOffset = x - lastX, yOffset = lastY - y;
+  Float32 xOffset = x - lastX, yOffset = lastY - y;
   lastX = x;
   lastY = y;
 
@@ -37,8 +35,8 @@ void Camera::handleMouseMovement (float x, float y) noexcept {
   update ();
 }
 
-void Camera::move (Direction direction, float deltaTime) noexcept {
-  float velocity = speed * deltaTime;
+void Camera::move (Direction direction, Float32 deltaTime) noexcept {
+  Float32 velocity = speed * deltaTime;
   switch (direction) {
     case Direction::Left: position -= right * velocity; break;
     case Direction::Right: position += right * velocity; break;
@@ -47,8 +45,8 @@ void Camera::move (Direction direction, float deltaTime) noexcept {
   }
 }
 
-Camera::Camera (const math::Vector3& up, const math::Vector3& position, float yaw, float pitch)
-  : firstMouse {true}, zoom {45.f}, speed {530.f}, sensitivity {0.1f},
+Camera::Camera (const math::Vector3& up, const math::Vector3& position, Float32 yaw, Float32 pitch)
+  : firstMouse {True}, zoom {45.f}, speed {530.f}, sensitivity {0.1f},
   zFar {3000.f}, yaw {yaw}, pitch {pitch}, worldUp {up}, position {position} {
 
   update ();

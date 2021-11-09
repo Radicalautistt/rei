@@ -13,19 +13,19 @@ namespace rei::gltf {
 
 // Sort primitives by material index so that it would be easier to merge
 // ones with the same material into batches.
-static void sortPrimitives (assets::gltf::Primitive* primitives, int low, int high) {
+static void sortPrimitives (assets::gltf::Primitive* primitives, Int32 low, Int32 high) {
   if (low >= 0 && high >= 0 && low < high) {
-    int pivotIndex = 0;
+    Int32 pivotIndex = 0;
     // NOTE The cast of (low + high) to unsigned is made because division of
     // an unsigned integer by a constant is faster than that of a signed one.
-    // After that, unsigned is cast back into signed, because conversion to float
+    // After that, unsigned is cast back into signed, because conversion to Float32
     // is faster with signed integers. Also, casting signed->unsigned and vice versa is free.
     // Reference: Agner Fog's Optimization Manual 1, page 30 and 40.
-    uint32_t middle = (uint32_t) floorf ((float) ((int32_t) ((uint32_t) (low + high) / 2u)));
-    uint32_t pivot = primitives[middle].material;
+    Uint32 middle = (Uint32) floorf ((Float32) ((Int32) ((Uint32) (low + high) / 2u)));
+    Uint32 pivot = primitives[middle].material;
 
-    int left = low - 1;
-    int right = high + 1;
+    Int32 left = low - 1;
+    Int32 right = high + 1;
 
     for (;;) {
       do ++left; while (primitives[left].material < pivot);
@@ -53,9 +53,9 @@ void load (
 
   assets::gltf::Data gltf;
   assets::gltf::load (relativePath, &gltf);
-  sortPrimitives (gltf.mesh.primitives, 0, (int) gltf.mesh.primitivesCount - 1);
+  sortPrimitives (gltf.mesh.primitives, 0, (Int32) gltf.mesh.primitivesCount - 1);
 
-  uint32_t vertexCount = 0, indexCount = 0;
+  Uint32 vertexCount = 0, indexCount = 0;
 
   for (size_t index = 0; index < gltf.mesh.primitivesCount; ++index) {
     const auto current = &gltf.mesh.primitives[index];
@@ -63,49 +63,49 @@ void load (
     vertexCount += gltf.accessors[current->attributes.position].count;
   }
 
-  uint32_t vertexOffset = 0, indexOffset = 0;
+  Uint32 vertexOffset = 0, indexOffset = 0;
   auto vertices = MALLOC (Vertex, vertexCount);
-  auto indices = MALLOC (uint32_t, indexCount);
+  auto indices = MALLOC (Uint32, indexCount);
 
   output->batches = MALLOC (Batch, gltf.materialsCount);
 
   #define GET_ACCESSOR(attribute, result) do {                                             \
     const auto accessor = &gltf.accessors[currentPrimitive->attributes.attribute];         \
     const auto bufferView = &gltf.bufferViews[accessor->bufferView];                       \
-    result = (const float*) (&gltf.buffer[accessor->byteOffset + bufferView->byteOffset]); \
-  } while (false)
+    result = (const Float32*) (&gltf.buffer[accessor->byteOffset + bufferView->byteOffset]); \
+  } while (0)
 
-  uint32_t firstIndex = 0;
-  uint32_t batchOffset = 0;
-  uint32_t currentMaterial = 0;
-  uint32_t currentIndexCount = 0;
+  Uint32 firstIndex = 0;
+  Uint32 batchOffset = 0;
+  Uint32 currentMaterial = 0;
+  Uint32 currentIndexCount = 0;
 
   for (size_t primitive = 0; primitive < gltf.mesh.primitivesCount; ++primitive) {
     const auto currentPrimitive = &gltf.mesh.primitives[primitive];
 
-    uint32_t vertexStart = vertexOffset;
+    Uint32 vertexStart = vertexOffset;
 
-    const float* uvAccessor = nullptr;
-    const float* normalAccessor = nullptr;
-    const float* positionAccessor = nullptr;
+    const Float32* uvAccessor = nullptr;
+    const Float32* normalAccessor = nullptr;
+    const Float32* positionAccessor = nullptr;
 
     GET_ACCESSOR (uv, uvAccessor);
     GET_ACCESSOR (normal, normalAccessor);
     GET_ACCESSOR (position, positionAccessor);
 
-    uint32_t currentVertexCount = gltf.accessors[currentPrimitive->attributes.position].count;
+    Uint32 currentVertexCount = gltf.accessors[currentPrimitive->attributes.position].count;
 
-    for (uint32_t vertex = 0; vertex < currentVertexCount; ++vertex) {
+    for (Uint32 vertex = 0; vertex < currentVertexCount; ++vertex) {
       auto newVertex = &vertices[vertexOffset++];
 
-      memcpy (&newVertex->u, &uvAccessor[vertex * 2], sizeof (float) * 2);
-      memcpy (&newVertex->nx, &normalAccessor[vertex * 3], sizeof (float) * 3);
-      memcpy (&newVertex->x, &positionAccessor[vertex * 3], sizeof (float) * 3);
+      memcpy (&newVertex->u, &uvAccessor[vertex * 2], sizeof (Float32) * 2);
+      memcpy (&newVertex->nx, &normalAccessor[vertex * 3], sizeof (Float32) * 3);
+      memcpy (&newVertex->x, &positionAccessor[vertex * 3], sizeof (Float32) * 3);
     }
 
     const auto accessor = &gltf.accessors[currentPrimitive->indices];
     const auto bufferView = &gltf.bufferViews[accessor->bufferView];
-    const auto indexAccessor = (const uint16_t*) &gltf.buffer[accessor->byteOffset + bufferView->byteOffset];
+    const auto indexAccessor = (const Uint16*) &gltf.buffer[accessor->byteOffset + bufferView->byteOffset];
 
     if (currentMaterial == currentPrimitive->material) {
       currentIndexCount += accessor->count;
@@ -128,7 +128,7 @@ void load (
       newBatch->materialIndex = currentMaterial;
     }
 
-    for (uint32_t index = 0; index < accessor->count; ++index)
+    for (Uint32 index = 0; index < accessor->count; ++index)
       indices[indexOffset++] = indexAccessor[index] + vertexStart;
   }
 
@@ -162,7 +162,7 @@ void load (
 
   {
     vku::Buffer stagingBuffer;
-    VkDeviceSize indexBufferSize = sizeof (uint32_t) * indexCount;
+    VkDeviceSize indexBufferSize = sizeof (Uint32) * indexCount;
     vku::allocateStagingBuffer (allocator, indexBufferSize, &stagingBuffer);
 
     VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
@@ -212,9 +212,9 @@ void load (
     allocationInfo.compressed = True;
     allocationInfo.pixels = asset.data;
     allocationInfo.compressedSize = asset.size;
-    allocationInfo.width = (uint32_t) metadata["width"].get_uint64 ();
-    allocationInfo.height = (uint32_t) metadata["height"].get_uint64 ();
-    allocationInfo.mipLevels = (uint32_t) metadata["mipLevels"].get_uint64 ();
+    allocationInfo.width = (Uint32) metadata["width"].get_uint64 ();
+    allocationInfo.height = (Uint32) metadata["height"].get_uint64 ();
+    allocationInfo.mipLevels = (Uint32) metadata["mipLevels"].get_uint64 ();
 
     vku::allocateTexture (
       device,
@@ -321,12 +321,12 @@ void Model::initMaterialDescriptors (VkDevice device) {
 }
 
 void Model::initDescriptorPool (VkDevice device) {
-  VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (uint32_t) texturesCount};
+  VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (Uint32) texturesCount};
 
   VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
   createInfo.poolSizeCount = 1;
   createInfo.pPoolSizes = &poolSize;
-  createInfo.maxSets = (uint32_t) materialsCount;
+  createInfo.maxSets = (Uint32) materialsCount;
 
   VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &descriptorPool));
 }
@@ -399,8 +399,8 @@ void Model::initPipelines (
   viewport.y = 0.f;
   viewport.minDepth = 0.f;
   viewport.maxDepth = 1.f;
-  viewport.width = (float) swapchain->extent.width;
-  viewport.height = (float) swapchain->extent.height;
+  viewport.width = (Float32) swapchain->extent.width;
+  viewport.height = (Float32) swapchain->extent.height;
 
   VkPipelineViewportStateCreateInfo viewportInfo {PIPELINE_VIEWPORT_STATE_CREATE_INFO};
   viewportInfo.scissorCount = 1;

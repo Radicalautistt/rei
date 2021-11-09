@@ -3,17 +3,16 @@
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 
-#include "common.hpp"
 #include "window.hpp"
 
 namespace rei::xcb {
 
-void Window::getMousePosition (float* output) {
+void Window::getMousePosition (Float32* output) {
   auto result = xcb_query_pointer_unchecked (connection, handle);
   auto reply = xcb_query_pointer_reply (connection, result, nullptr);
 
-  output[0] = SCAST <float> (reply->win_x);
-  output[1] = SCAST <float> (reply->win_y);
+  output[0] = (Float32) reply->win_x;
+  output[1] = (Float32) reply->win_y;
 }
 
 void createWindow (const WindowCreateInfo* createInfo, Window* output) {
@@ -25,8 +24,8 @@ void createWindow (const WindowCreateInfo* createInfo, Window* output) {
   output->screen = rootsIterator.data;
   output->handle = xcb_generate_id (output->connection);
 
-  uint32_t valueMask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-  uint32_t eventMask = XCB_EVENT_MASK_EXPOSURE |
+  Uint32 valueMask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+  Uint32 eventMask = XCB_EVENT_MASK_EXPOSURE |
     XCB_EVENT_MASK_KEY_PRESS |
     XCB_EVENT_MASK_KEY_RELEASE |
 
@@ -39,7 +38,7 @@ void createWindow (const WindowCreateInfo* createInfo, Window* output) {
     XCB_EVENT_MASK_ENTER_WINDOW |
     XCB_EVENT_MASK_LEAVE_WINDOW;
 
-  uint32_t values[] {output->screen->black_pixel, eventMask};
+  Uint32 values[] {output->screen->black_pixel, eventMask};
 
   xcb_create_window (
     output->connection,
@@ -66,7 +65,7 @@ void createWindow (const WindowCreateInfo* createInfo, Window* output) {
     XCB_ATOM_WM_NAME,
     XCB_ATOM_STRING,
     8,
-    SCAST <uint32_t> (strlen (createInfo->name)),
+    (Uint32) strlen (createInfo->name),
     createInfo->name
   );
 

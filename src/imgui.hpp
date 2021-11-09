@@ -1,6 +1,7 @@
 #ifndef IMGUI_HPP
 #define IMGUI_HPP
 
+#include "common.hpp"
 #include "vkutils.hpp"
 
 struct ImDrawData;
@@ -28,8 +29,8 @@ struct ContextCreateInfo {
 
 struct Context {
   struct {
-    uint32_t index;
-    uint32_t vertex;
+    Uint32 index;
+    Uint32 vertex;
   } counts;
 
   ImGuiContext* handle;
@@ -55,9 +56,9 @@ struct Context {
   vku::Image fontTexture;
 
   void newFrame ();
-  void updateBuffers (uint32_t frameIndex, const ImDrawData* drawData);
+  void updateBuffers (Uint32 frameIndex, const ImDrawData* drawData);
   void handleEvents (const xcb_generic_event_t* event);
-  void renderDrawData (VkCommandBuffer commandBuffer, uint32_t frameIndex, const ImDrawData* drawData);
+  void renderDrawData (VkCommandBuffer commandBuffer, Uint32 frameIndex, const ImDrawData* drawData);
 };
 
 void create (const ContextCreateInfo* createInfo, Context* output);

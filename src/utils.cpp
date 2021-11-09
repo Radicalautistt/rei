@@ -12,13 +12,13 @@ void Timer::init () noexcept {
   gettimeofday (&Timer::start, nullptr);
 }
 
-float Timer::getCurrentTime () noexcept {
+Float32 Timer::getCurrentTime () noexcept {
   timeval now;
   gettimeofday (&now, nullptr);
-  return SCAST <float> ((now.tv_sec - start.tv_sec) * 1000 + (now.tv_usec - start.tv_usec) / 1000) / 1000.f;
+  return (Float32) ((now.tv_sec - start.tv_sec) * 1000 + (now.tv_usec - start.tv_usec) / 1000) / 1000.f;
 }
 
-Result readFile (const char* relativePath, bool binary, File* output) {
+Result readFile (const char* relativePath, Bool binary, File* output) {
   FILE* file = fopen (relativePath, binary ? "rb" : "r");
   if (!file) return Result::FileDoesNotExist;
 

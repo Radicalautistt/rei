@@ -3,11 +3,22 @@
 
 #include <alloca.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <x86intrin.h>
 
+typedef unsigned char Uint8;
+typedef unsigned short int Uint16;
 typedef unsigned int Uint32;
+typedef unsigned long int Uint64;
 
+typedef signed char Int8;
+typedef signed short int Int16;
+typedef signed int Int32;
+typedef signed long int Int64;
+
+typedef float Float32;
+typedef double Float64;
+
+typedef Uint8 Bool;
 typedef Uint32 Bool32;
 
 #ifndef True
@@ -81,14 +92,6 @@ typedef Uint32 Bool32;
 #  define LOGS_WARNING(string) LOG_WARNING ("%s", string)
 #endif
 
-#ifndef SCAST
-#  define SCAST static_cast
-#endif
-
-#ifndef RCAST
-#  define RCAST reinterpret_cast
-#endif
-
 #ifndef SWAP
 #  define SWAP(a, b) do { \
      auto temp = *a;      \
@@ -110,11 +113,11 @@ typedef Uint32 Bool32;
 #endif
 
 #ifndef ALLOCA
-#  define ALLOCA(Type, count) SCAST <Type*> (alloca (sizeof (Type) * count))
+#  define ALLOCA(Type, count) (Type*) alloca (sizeof (Type) * count)
 #endif
 
 #ifndef MALLOC
-#  define MALLOC(Type, count) SCAST <Type*> (malloc (sizeof (Type) * count))
+#  define MALLOC(Type, count) (Type*) malloc (sizeof (Type) * count)
 #endif
 
 #ifdef NDEBUG
@@ -164,7 +167,7 @@ typedef Uint32 Bool32;
 
 #ifndef COUNT_CYCLES
 #  define COUNT_CYCLES(routine) do {                                                                       \
-     uint64_t start = __rdtsc ();                                                                          \
+     Uint64 start = __rdtsc ();                                                                            \
      routine;                                                                                              \
      LOG_INFO (ANSI_YELLOW "%s" ANSI_GREEN " took %llu cycles to comptute", #routine, __rdtsc () - start); \
    } while (0)
@@ -177,13 +180,13 @@ typedef Uint32 Bool32;
 
 namespace rei {
 
-enum LogLevel : uint8_t {
+enum LogLevel : Uint8 {
   LogLevelInfo,
   LogLevelError,
   LogLevelWarning
 };
 
-enum class Result : uint8_t {
+enum class Result : Uint8 {
   Success,
   FileIsEmpty,
   FileDoesNotExist

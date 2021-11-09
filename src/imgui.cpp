@@ -1,6 +1,5 @@
 #include "math.hpp"
 #include "imgui.hpp"
-#include "common.hpp"
 #include "window.hpp"
 
 #include <imgui/imgui.h>
@@ -8,9 +7,9 @@
 
 namespace rei::imgui {
 
-static bool mouseButtonsDown[2];
+static Bool32 mouseButtonsDown[2];
 
-void Context::updateBuffers (uint32_t frameIndex, const ImDrawData* drawData) {
+void Context::updateBuffers (Uint32 frameIndex, const ImDrawData* drawData) {
   if (drawData->TotalVtxCount) {
     counts.index = drawData->TotalIdxCount;
     counts.vertex = drawData->TotalVtxCount;
@@ -57,7 +56,7 @@ void Context::updateBuffers (uint32_t frameIndex, const ImDrawData* drawData) {
     auto indices = (ImDrawIdx*) indexBuffer->mapped;
     auto vertices = (ImDrawVert*) vertexBuffer->mapped;
 
-    for (int index = 0; index < drawData->CmdListsCount; ++index) {
+    for (Int32 index = 0; index < drawData->CmdListsCount; ++index) {
       const ImDrawList* current = drawData->CmdLists[index];
 
       memcpy (indices, current->IdxBuffer.Data, sizeof (ImDrawIdx) * current->IdxBuffer.Size);
@@ -83,7 +82,7 @@ void Context::newFrame () {
   io.MouseDown[0] = mouseButtonsDown[0];
   io.MouseDown[1] = mouseButtonsDown[1];
 
-  mouseButtonsDown[0] = mouseButtonsDown[1] = false;
+  mouseButtonsDown[0] = mouseButtonsDown[1] = False;
 
   ImGui::NewFrame ();
 }
@@ -95,14 +94,14 @@ void Context::handleEvents (const xcb_generic_event_t* event) {
   switch (event->response_type & ~0x80) {
     case XCB_BUTTON_PRESS: {
       const auto button = (const xcb_button_press_event_t*) event;
-      if (button->detail == 1) mouseButtonsDown[0] = true;
-      if (button->detail == 3) mouseButtonsDown[1] = true;
+      if (button->detail == 1) mouseButtonsDown[0] = True;
+      if (button->detail == 3) mouseButtonsDown[1] = True;
     } break;
     default: break;
   }
 }
 
-void Context::renderDrawData (VkCommandBuffer commandBuffer, uint32_t frameIndex, const ImDrawData* drawData) {
+void Context::renderDrawData (VkCommandBuffer commandBuffer, Uint32 frameIndex, const ImDrawData* drawData) {
   vkCmdBindDescriptorSets (
     commandBuffer,
     VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -141,23 +140,23 @@ void Context::renderDrawData (VkCommandBuffer commandBuffer, uint32_t frameIndex
 
   if (drawData->CmdListsCount) {
     VkDeviceSize offset = 0;
-    int32_t vertexOffset = 0;
-    uint32_t indexOffset = 0;
+    Int32 vertexOffset = 0;
+    Uint32 indexOffset = 0;
 
     vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffers[frameIndex].handle, &offset);
     vkCmdBindIndexBuffer (commandBuffer, indexBuffers[frameIndex].handle, 0, VK_INDEX_TYPE_UINT16);
 
-    for (int32_t list = 0; list < drawData->CmdListsCount; ++list) {
+    for (Int32 list = 0; list < drawData->CmdListsCount; ++list) {
       const ImDrawList* commandList = drawData->CmdLists[list];
 
-      for (int32_t command = 0; command < commandList->CmdBuffer.Size; ++command) {
+      for (Int32 command = 0; command < commandList->CmdBuffer.Size; ++command) {
 	const ImDrawCmd* drawCommand = &commandList->CmdBuffer[command];
 
 	VkRect2D scissor;
-	scissor.offset.x = MAX ((int32_t) drawCommand->ClipRect.x, 0);
-	scissor.offset.y = MAX ((int32_t) drawCommand->ClipRect.y, 0);
-	scissor.extent.width = (uint32_t) (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
-	scissor.extent.height = (uint32_t) (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
+	scissor.offset.x = MAX ((Int32) drawCommand->ClipRect.x, 0);
+	scissor.offset.y = MAX ((Int32) drawCommand->ClipRect.y, 0);
+	scissor.extent.width = (Uint32) (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
+	scissor.extent.height = (Uint32) (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
 
 	vkCmdSetScissor (commandBuffer, 0, 1, &scissor);
 
@@ -185,7 +184,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
   output->transferContext = createInfo->transferContext;
 
   // Create dummy vertex and index buffers for each frame.
-  for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
+  for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
     auto indexBuffer = &output->indexBuffers[index];
     auto vertexBuffer = &output->vertexBuffers[index];
 
@@ -208,7 +207,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
   }
 
   { // Create font texture
-    int width, height;
+    Int32 width, height;
     unsigned char* pixels;
     ImGuiIO& io = ImGui::GetIO ();
     io.Fonts->GetTexDataAsRGBA32 (&pixels, &width, &height);
@@ -217,8 +216,8 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     allocationInfo.mipLevels = 1;
     allocationInfo.compressed = False;
     allocationInfo.compressedSize = 0;
-    allocationInfo.width = (uint32_t) width;
-    allocationInfo.height = (uint32_t) height;
+    allocationInfo.width = (Uint32) width;
+    allocationInfo.height = (Uint32) height;
     allocationInfo.pixels = (const char*) pixels;
 
     vku::allocateTexture (
@@ -428,7 +427,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
 void destroy (Context* context) {
   vkDestroyFence (context->device, context->bufferUpdateFence, nullptr);
 
-  for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
+  for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
     vmaUnmapMemory (context->allocator, context->indexBuffers[index].allocation);
     vmaDestroyBuffer (context->allocator, context->indexBuffers[index].handle, context->indexBuffers[index].allocation);
 

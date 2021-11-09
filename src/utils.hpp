@@ -20,10 +20,10 @@ struct Timer {
   static timeval start;
 
   static void init () noexcept;
-  [[nodiscard]] static float getCurrentTime () noexcept;
+  [[nodiscard]] static Float32 getCurrentTime () noexcept;
 };
 
-[[nodiscard]] Result readFile (const char* relativePath, bool binary, File* output);
+[[nodiscard]] Result readFile (const char* relativePath, Bool binary, File* output);
 
 }
 

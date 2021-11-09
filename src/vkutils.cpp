@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "utils.hpp"
-#include "common.hpp"
 #include "window.hpp"
 #include "vkutils.hpp"
 
@@ -12,15 +11,15 @@
 namespace rei::vku {
 
 void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices* output) {
-  output->haveGraphics = output->havePresent = output->haveTransfer = output->haveCompute = false;
+  output->haveGraphics = output->havePresent = output->haveTransfer = output->haveCompute = False;
 
-  uint32_t count = 0;
+  Uint32 count = 0;
   vkGetPhysicalDeviceQueueFamilyProperties (physicalDevice, &count, nullptr);
 
   auto available = ALLOCA (VkQueueFamilyProperties, count);
   vkGetPhysicalDeviceQueueFamilyProperties (physicalDevice, &count, available);
 
-  for (uint32_t index = 0; index < count; ++index) {
+  for (Uint32 index = 0; index < count; ++index) {
     auto current = &available[index];
 
     if (current->queueCount) {
@@ -28,22 +27,22 @@ void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targe
       VK_CHECK (vkGetPhysicalDeviceSurfaceSupportKHR (physicalDevice, index, targetSurface, &supportsPresentation));
 
       if (supportsPresentation) {
-	output->havePresent = true;
+	output->havePresent = True;
 	output->present = index;
       }
 
       if (current->queueFlags & VK_QUEUE_COMPUTE_BIT) {
-	output->haveCompute = true;
+	output->haveCompute = True;
         output->compute = index;
       }
 
       if (current->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-	output->haveGraphics = true;
+	output->haveGraphics = True;
 	output->graphics = index;
       }
 
       if (current->queueFlags & VK_QUEUE_TRANSFER_BIT) {
-        output->haveTransfer = true;
+        output->haveTransfer = True;
 	output->transfer = index;
       }
 
@@ -54,29 +53,29 @@ void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targe
 }
 
 void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, QueueFamilyIndices* outputIndices, VkPhysicalDevice* output) {
-  uint32_t count = 0;
+  Uint32 count = 0;
   VK_CHECK (vkEnumeratePhysicalDevices (instance, &count, nullptr));
 
   auto available = ALLOCA (VkPhysicalDevice, count);
   VK_CHECK (vkEnumeratePhysicalDevices (instance, &count, available));
 
-  for (uint32_t index = 0; index < count; ++index) {
+  for (Uint32 index = 0; index < count; ++index) {
     auto current = available[index];
-    bool supportsExtensions, supportsSwapchain = false;
+    Bool supportsExtensions, supportsSwapchain = False;
 
     { // Check support for required extensions
-      uint32_t extensionsCount = 0;
+      Uint32 extensionsCount = 0;
       VK_CHECK (vkEnumerateDeviceExtensionProperties (current, nullptr, &extensionsCount, nullptr));
 
       auto availableExtensions = ALLOCA (VkExtensionProperties, extensionsCount);
       VK_CHECK (vkEnumerateDeviceExtensionProperties (current, nullptr, &extensionsCount, availableExtensions));
 
-      for (uint32_t required = 0; required < ARRAY_SIZE (vkc::requiredDeviceExtensions); ++required) {
-	supportsExtensions = false;
+      for (Uint32 required = 0; required < ARRAY_SIZE (vkc::requiredDeviceExtensions); ++required) {
+	supportsExtensions = False;
 
-	for (uint32_t present = 0; present < extensionsCount; ++present) {
+	for (Uint32 present = 0; present < extensionsCount; ++present) {
 	  if (!strcmp (availableExtensions[present].extensionName, vkc::requiredDeviceExtensions[required])) {
-	    supportsExtensions = true;
+	    supportsExtensions = True;
 	    break;
 	  }
 	}
@@ -84,7 +83,7 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
     }
 
     if (supportsExtensions) {
-      uint32_t formatsCount = 0, presentModesCount = 0;
+      Uint32 formatsCount = 0, presentModesCount = 0;
       VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (current, targetSurface, &formatsCount, nullptr));
       VK_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (current, targetSurface, &presentModesCount, nullptr));
 
@@ -93,7 +92,7 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
 
     findQueueFamilyIndices (current, targetSurface, outputIndices);
 
-    bool hasQueueFamilies =
+    Bool hasQueueFamilies =
       outputIndices->haveGraphics &&
       outputIndices->havePresent &&
       outputIndices->haveTransfer &&
@@ -118,35 +117,35 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
       output->extent = surfaceCapabilities.currentExtent;
     } else {
       output->extent.width = CLAMP (
-        SCAST <uint32_t> (createInfo->window->width),
+        (Uint32) createInfo->window->width,
         surfaceCapabilities.minImageExtent.width,
         surfaceCapabilities.maxImageExtent.width
       );
 
       output->extent.height = CLAMP (
-        SCAST <uint32_t> (createInfo->window->height),
+        (Uint32) createInfo->window->height,
         surfaceCapabilities.minImageExtent.height,
         surfaceCapabilities.maxImageExtent.height
       );
     }
 
-    uint32_t minImagesCount = surfaceCapabilities.minImageCount + 1;
+    Uint32 minImagesCount = surfaceCapabilities.minImageCount + 1;
     if (surfaceCapabilities.maxImageCount && minImagesCount > surfaceCapabilities.maxImageCount)
       minImagesCount = surfaceCapabilities.maxImageCount;
 
     // Choose surface format
     VkSurfaceFormatKHR surfaceFormat;
     {
-      uint32_t count = 0;
+      Uint32 count = 0;
       VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, nullptr));
 
       auto available = ALLOCA (VkSurfaceFormatKHR, count);
       VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, available));
 
       surfaceFormat = available[0];
-      for (uint32_t index = 0; index < count; ++index) {
-        bool rgba8 = available[index].format == VK_FORMAT_R8G8B8A8_SRGB;
-        bool nonLinear = available[index].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      for (Uint32 index = 0; index < count; ++index) {
+        Bool rgba8 = available[index].format == VK_FORMAT_R8G8B8A8_SRGB;
+        Bool nonLinear = available[index].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
         if (rgba8 && nonLinear) {
           surfaceFormat = available[index];
@@ -160,13 +159,13 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
     // Choose present mode
     VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
     {
-      uint32_t count = 0;
+      Uint32 count = 0;
       VK_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, nullptr));
 
       auto available = ALLOCA (VkPresentModeKHR, count);
       VK_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, available));
 
-      for (uint32_t index = 0; index < count; ++index) {
+      for (Uint32 index = 0; index < count; ++index) {
         if (available[index] == VK_PRESENT_MODE_MAILBOX_KHR) {
           presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 	  break;
@@ -209,7 +208,7 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
     subresourceRange.baseArrayLayer = 0;
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    for (uint32_t index = 0; index < output->imagesCount; ++index) {
+    for (Uint32 index = 0; index < output->imagesCount; ++index) {
       VkImageViewCreateInfo info {IMAGE_VIEW_CREATE_INFO};
       info.format = output->format;
       info.image = output->images[index];
@@ -272,7 +271,7 @@ void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain* swapc
   vkDestroyImageView (device, swapchain->depthImage.view, nullptr);
   vmaDestroyImage (allocator, swapchain->depthImage.handle, swapchain->depthImage.allocation);
 
-  for (uint32_t index = 0; index < swapchain->imagesCount; ++index)
+  for (Uint32 index = 0; index < swapchain->imagesCount; ++index)
     vkDestroyImageView (device, swapchain->views[index], nullptr);
 
   free (swapchain->views);
@@ -283,11 +282,11 @@ void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain* swapc
 
 void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule* output) {
   utils::File shaderFile;
-  REI_CHECK (utils::readFile (relativePath, true, &shaderFile));
+  REI_CHECK (utils::readFile (relativePath, True, &shaderFile));
 
   VkShaderModuleCreateInfo createInfo {SHADER_MODULE_CREATE_INFO};
   createInfo.codeSize = shaderFile.size;
-  createInfo.pCode = RCAST <uint32_t*> (shaderFile.contents);
+  createInfo.pCode = (Uint32*) shaderFile.contents;
 
   VK_CHECK (vkCreateShaderModule (device, &createInfo, nullptr, output));
   free (shaderFile.contents);
@@ -296,7 +295,7 @@ void createShaderModule (VkDevice device, const char* relativePath, VkShaderModu
 void createGraphicsPipelines (
   VkDevice device,
   VkPipelineCache pipelineCache,
-  uint32_t count,
+  Uint32 count,
   const GraphicsPipelineCreateInfo* createInfos,
   VkPipeline* outputs) {
 
@@ -304,7 +303,7 @@ void createGraphicsPipelines (
   auto infos = MALLOC (VkGraphicsPipelineCreateInfo, count);
   memset (infos, 0, sizeof (VkGraphicsPipelineCreateInfo) * count);
 
-  for (uint32_t index = 0; index < count; ++index) {
+  for (Uint32 index = 0; index < count; ++index) {
     // This naming is so horrible
     auto info = &infos[index];
     auto currentShader = &shaders[index];
@@ -346,7 +345,7 @@ void createGraphicsPipelines (
 
   VK_CHECK (vkCreateGraphicsPipelines (device, pipelineCache, count, infos, nullptr, outputs));
 
-  for (uint32_t index = 0; index < count; ++index) {
+  for (Uint32 index = 0; index < count; ++index) {
     vkDestroyShaderModule (device, shaders[index].pixel, nullptr);
     vkDestroyShaderModule (device, shaders[index].vertex, nullptr);
   }
@@ -394,7 +393,7 @@ void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo* allocat
 
   VmaAllocationCreateInfo vmaAllocationInfo {};
   vmaAllocationInfo.requiredFlags = allocationInfo->requiredFlags;
-  vmaAllocationInfo.usage = SCAST <VmaMemoryUsage> (allocationInfo->memoryUsage);
+  vmaAllocationInfo.usage = (VmaMemoryUsage) allocationInfo->memoryUsage;
 
   VK_CHECK (vmaCreateBuffer (
     allocator,

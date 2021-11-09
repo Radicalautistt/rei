@@ -1,6 +1,7 @@
 #ifndef VKUTILS_HPP
 #define VKUTILS_HPP
 
+#include "common.hpp"
 #include "vkcommon.hpp"
 
 // Forward declarations
@@ -16,8 +17,8 @@ struct Window;
 namespace rei::vku {
 
 struct QueueFamilyIndices {
-  bool haveGraphics, havePresent, haveTransfer, haveCompute;
-  uint32_t graphics, present, transfer, compute;
+  Bool haveGraphics, havePresent, haveTransfer, haveCompute;
+  Uint32 graphics, present, transfer, compute;
 };
 
 struct Image {
@@ -40,7 +41,7 @@ struct SwapchainCreateInfo {
 struct Swapchain {
   VkFormat format;
 
-  uint32_t imagesCount;
+  Uint32 imagesCount;
   VkImage* images;
   VkImageView* views;
 
@@ -75,7 +76,7 @@ struct GraphicsPipelineCreateInfo {
 
 struct BufferAllocationInfo {
   VkBufferUsageFlags bufferUsage;
-  uint32_t memoryUsage;
+  Uint32 memoryUsage;
   VkMemoryPropertyFlags requiredFlags;
 
   VkDeviceSize size;
@@ -103,8 +104,8 @@ struct ImageLayoutTransitionInfo {
 
 struct TextureAllocationInfo {
   Bool32 compressed;
-  uint32_t mipLevels;
-  uint32_t width, height;
+  Uint32 mipLevels;
+  Uint32 width, height;
   const char* pixels;
   size_t compressedSize;
 };
@@ -130,7 +131,7 @@ void createShaderModule (VkDevice device, const char* relativePath, VkShaderModu
 void createGraphicsPipelines (
   VkDevice device,
   VkPipelineCache pipelineCache,
-  uint32_t count,
+  Uint32 count,
   const GraphicsPipelineCreateInfo* createInfos,
   VkPipeline* outputs
 );

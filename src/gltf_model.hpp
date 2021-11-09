@@ -1,8 +1,7 @@
 #ifndef GLTF_MODEL_HPP
 #define GLTF_MODEL_HPP
 
-#include <stdint.h>
-
+#include "common.hpp"
 #include "vkutils.hpp"
 
 namespace rei::math {
@@ -12,9 +11,9 @@ struct Matrix4;
 namespace rei::gltf {
 
 struct Vertex {
-  float x, y, z;
-  float nx, ny, nz;
-  float u, v;
+  Float32 x, y, z;
+  Float32 nx, ny, nz;
+  Float32 u, v;
 };
 
 struct Material {
@@ -26,9 +25,9 @@ struct Material {
 
 // This is used to group multiple primitives with the same material
 struct Batch {
-  uint32_t firstIndex;
-  uint32_t indexCount;
-  uint32_t materialIndex;
+  Uint32 firstIndex;
+  Uint32 indexCount;
+  Uint32 materialIndex;
 };
 
 struct Model {

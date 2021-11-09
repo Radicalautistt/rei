@@ -1,7 +1,7 @@
 #ifndef WINDOW_HPP
 #define WINDOW_HPP
 
-#include <stdint.h>
+#include "common.hpp"
 
 struct xcb_screen_t;
 struct xcb_connection_t;
@@ -9,18 +9,18 @@ struct xcb_connection_t;
 namespace rei::xcb {
 
 struct WindowCreateInfo {
-  int16_t x, y;
-  uint16_t width, height;
+  Int16 x, y;
+  Uint16 width, height;
   const char* name;
 };
 
 struct Window {
-  uint16_t width, height;
-  uint32_t handle;
+  Uint16 width, height;
+  Uint32 handle;
   xcb_connection_t* connection;
   xcb_screen_t* screen;
 
-  void getMousePosition (float* output);
+  void getMousePosition (Float32* output);
 };
 
 void createWindow (const WindowCreateInfo* createInfo, Window* output);

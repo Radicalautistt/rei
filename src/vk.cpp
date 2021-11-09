@@ -24,10 +24,10 @@ void rei::VulkanContext::init () {
 
   REI_ASSERT (library);
 
-  vkGetInstanceProcAddr = RCAST <PFN_vkGetInstanceProcAddr> (dlsym (library, "vkGetInstanceProcAddr"));
+  vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) dlsym (library, "vkGetInstanceProcAddr");
 
   // Load global functions
-  #define X(name) name = RCAST <PFN_##name> (vkGetInstanceProcAddr (nullptr, #name));
+  #define X(name) name = (PFN_##name) vkGetInstanceProcAddr (nullptr, #name);
     VK_GLOBAL_FUNCTIONS
   #undef X
 }
@@ -37,13 +37,13 @@ void rei::VulkanContext::shutdown () {
 }
 
 void rei::VulkanContext::loadInstance (VkInstance instance) {
-  #define X(name) name = RCAST <PFN_##name> (vkGetInstanceProcAddr (instance, #name));
+  #define X(name) name = (PFN_##name) vkGetInstanceProcAddr (instance, #name);
     VK_INSTANCE_FUNCTIONS
   #undef X
 }
 
 void rei::VulkanContext::loadDevice (VkDevice device) {
-  #define X(name) name = RCAST <PFN_##name> (vkGetDeviceProcAddr (device, #name));
+  #define X(name) name = (PFN_##name) vkGetDeviceProcAddr (device, #name);
     VK_DEVICE_FUNCTIONS
   #undef X
 }

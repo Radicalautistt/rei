@@ -2,8 +2,9 @@
 #define MATH_HPP
 
 #include <math.h>
-#include <stdint.h>
 #include <immintrin.h>
+
+#include "common.hpp"
 
 #ifndef PI
 #  define PI 3.14159265359f
@@ -24,7 +25,7 @@
 
 namespace rei::math {
 
-[[nodiscard]] constexpr inline float radians (float degrees) noexcept {
+[[nodiscard]] constexpr inline Float32 radians (Float32 degrees) noexcept {
   return degrees * PI_BY_180;
 }
 
@@ -65,8 +66,8 @@ namespace simd::m128 {
   // used with _mm_shuffle_ps returns a register
   // of form (w, x, z, y) (in this case w is ingnored since we are operating on 3d vectors),
   // just like the first column of the formula (in reverse order).
-  const int leftMask = _MM_SHUFFLE (3, 0, 2, 1);
-  const int rightMask = _MM_SHUFFLE (3, 1, 0, 2);
+  const Int32 leftMask = _MM_SHUFFLE (3, 0, 2, 1);
+  const Int32 rightMask = _MM_SHUFFLE (3, 1, 0, 2);
 
   __m128 columns[4];
   columns[0] = _mm_shuffle_ps (a, a, leftMask);
@@ -79,25 +80,25 @@ namespace simd::m128 {
 }
 
 struct Vector2 {
-  float x, y;
+  Float32 x, y;
 
   Vector2 () = default;
-  constexpr Vector2 (float x, float y) : x {x}, y {y} {}
-  constexpr Vector2 (float scalar) : x {scalar}, y {scalar} {}
+  constexpr Vector2 (Float32 x, Float32 y) : x {x}, y {y} {}
+  constexpr Vector2 (Float32 scalar) : x {scalar}, y {scalar} {}
 };
 
 struct alignas (16) Vector3 {
-  float x, y, z;
+  Float32 x, y, z;
 
   Vector3 () = default;
-  constexpr Vector3 (float x, float y, float z) : x {x}, y {y}, z {z} {}
-  constexpr Vector3 (float scalar) : x {scalar}, y {scalar}, z {scalar} {}
+  constexpr Vector3 (Float32 x, Float32 y, Float32 z) : x {x}, y {y}, z {z} {}
+  constexpr Vector3 (Float32 scalar) : x {scalar}, y {scalar}, z {scalar} {}
 
   [[nodiscard]] inline __m128 load () const noexcept {
     return _mm_set_ps (0.f, z, y, x);
   }
 
-  inline Vector3& operator += (float scalar) noexcept {
+  inline Vector3& operator += (Float32 scalar) noexcept {
     _mm_store_ps (&this->x, _mm_add_ps (_mm_set1_ps (scalar), this->load ()));
     return *this;
   }
@@ -107,7 +108,7 @@ struct alignas (16) Vector3 {
     return *this;
   }
 
-  inline Vector3& operator *= (float scalar) noexcept {
+  inline Vector3& operator *= (Float32 scalar) noexcept {
     _mm_store_ps (&this->x, _mm_mul_ps (_mm_set1_ps (scalar), this->load ()));
     return *this;
   }
@@ -126,7 +127,7 @@ struct alignas (16) Vector3 {
     _mm_store_ps (&output->x, simd::m128::normalize (output->load ()));
   }
 
-  [[nodiscard]] static inline float dotProduct (const Vector3* a, const Vector3* b) noexcept {
+  [[nodiscard]] static inline Float32 dotProduct (const Vector3* a, const Vector3* b) noexcept {
     return _mm_cvtss_f32 (simd::m128::dotProduct (a->load (), b->load ()));
   }
 
@@ -144,13 +145,13 @@ inline Vector3 operator * (const Vector3& a, const Vector3& b) noexcept {
 }
 
 struct Vector4 {
-  float x, y, z, w;
+  Float32 x, y, z, w;
 
   Vector4 () = default;
-  constexpr Vector4 (float scalar) :
+  constexpr Vector4 (Float32 scalar) :
     x {scalar}, y {scalar}, z {scalar}, w {scalar} {}
 
-  constexpr Vector4 (float x, float y, float z, float w) :
+  constexpr Vector4 (Float32 x, Float32 y, Float32 z, Float32 w) :
     x {x}, y {y}, z {z}, w {w} {}
 
   [[nodiscard]] inline __m128 load () const noexcept {
@@ -162,7 +163,7 @@ inline Vector4 operator + (const Vector4& a, const Vector4& b) noexcept {
   GET_RESULT (Vector4, _mm_add_ps (a.load (), b.load ()));
 }
 
-inline Vector4 operator * (const Vector4& vector, float scalar) noexcept {
+inline Vector4 operator * (const Vector4& vector, Float32 scalar) noexcept {
   GET_RESULT (Vector4, _mm_mul_ps (vector.load (), _mm_set1_ps (scalar)));
 }
 
@@ -170,7 +171,7 @@ struct Matrix4 {
   Vector4 rows[4];
 
   Matrix4 () = default;
-  Matrix4 (float value) {
+  Matrix4 (Float32 value) {
     rows[0].x = value;
     rows[0].y = 0.f;
     rows[0].z = 0.f;
@@ -219,11 +220,11 @@ struct Matrix4 {
     rows[3].w = d.w;
   }
 
-  inline Vector4& operator [] (uint8_t index) noexcept {
+  inline Vector4& operator [] (Uint8 index) noexcept {
     return rows[index];
   }
 
-  inline const Vector4& operator [] (uint8_t index) const noexcept {
+  inline const Vector4& operator [] (Uint8 index) const noexcept {
     return rows[index];
   }
 
@@ -243,7 +244,7 @@ inline Matrix4 operator * (const Matrix4& a, const Matrix4& b) noexcept {
   aRows[2] = a[2].load ();
   aRows[3] = a[3].load ();
 
-  for (uint8_t index = 0; index < 4; ++index) {
+  for (Uint8 index = 0; index < 4; ++index) {
     auto left = _mm_add_ps (
       _mm_mul_ps (aRows[0], _mm_set1_ps (b[index].x)),
       _mm_mul_ps (aRows[1], _mm_set1_ps (b[index].y))
@@ -274,10 +275,10 @@ void lookAt (
 ) noexcept;
 
 void perspective (
-  float verticalFOV,
-  float aspectRatio,
-  float zNear,
-  float zFar,
+  Float32 verticalFOV,
+  Float32 aspectRatio,
+  Float32 zNear,
+  Float32 zFar,
   Matrix4& output
 ) noexcept;
 

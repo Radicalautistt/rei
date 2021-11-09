@@ -1,6 +1,5 @@
 #include <stdio.h>
 
-#include "vk.hpp"
 #include "utils.hpp"
 #include "imgui.hpp"
 #include "common.hpp"
@@ -36,14 +35,14 @@ int main () {
   VkSurfaceKHR windowSurface;
   VkPhysicalDevice physicalDevice;
   VkDevice device;
-  uint32_t queueFamilyIndex;
+  Uint32 queueFamilyIndex;
   VkQueue graphicsQueue, presentQueue, computeQueue;
 
   VmaAllocator allocator;
 
   rei::vku::Swapchain swapchain;
   VkRenderPass renderPass;
-  uint32_t frameIndex = 0;
+  Uint32 frameIndex = 0;
   Frame frames[FRAMES_COUNT];
   VkFramebuffer* framebuffers;
   VkClearValue clearValues[2];
@@ -137,7 +136,7 @@ int main () {
 
     VkPhysicalDeviceFeatures enabledFeatures {};
 
-    float queuePriority = 1.f;
+    Float32 queuePriority = 1.f;
     // NOTE All required queues have the same index on my device,
     // so I need only one queue create info. Perhaps, I might
     // handle them more appropriately in the future (so that this can work on different devices),
@@ -274,7 +273,7 @@ int main () {
     createInfo.width = swapchain.extent.width;
     createInfo.height = swapchain.extent.height;
 
-    for (uint32_t index = 0; index < swapchain.imagesCount; ++index) {
+    for (Uint32 index = 0; index < swapchain.imagesCount; ++index) {
       VkImageView attachments[2] {swapchain.views[index], swapchain.depthImage.view};
       createInfo.pAttachments = attachments;
 
@@ -298,7 +297,7 @@ int main () {
 
     VkSemaphoreCreateInfo semaphoreInfo {SEMAPHORE_CREATE_INFO};
 
-    for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
+    for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
       auto current = &frames[index];
       VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &current->commandPool));
 
@@ -330,7 +329,7 @@ int main () {
   { // Create/load pipeline cache
     VkPipelineCacheCreateInfo createInfo {PIPELINE_CACHE_CREATE_INFO};
     rei::utils::File cacheFile;
-    auto result = rei::utils::readFile ("pipeline.cache", true, &cacheFile);
+    auto result = rei::utils::readFile ("pipeline.cache", True, &cacheFile);
 
     switch (result) {
       case rei::Result::Success: {
@@ -367,15 +366,15 @@ int main () {
   sponza.initPipelines (device, renderPass, pipelineCache, &swapchain);
 
   { // Render loop
-    bool running = true;
-    float lastTime = 0.f;
-    float deltaTime = 0.f;
+    Bool32 running = True;
+    Float32 lastTime = 0.f;
+    Float32 deltaTime = 0.f;
 
     xcb_generic_event_t* event = nullptr;
 
     while (running) {
       camera.firstMouse = True;
-      float currentTime = rei::utils::Timer::getCurrentTime ();
+      Float32 currentTime = rei::utils::Timer::getCurrentTime ();
       deltaTime = currentTime - lastTime;
       lastTime = currentTime;
       ImGui::GetIO().DeltaTime = deltaTime;
@@ -384,7 +383,7 @@ int main () {
 	switch (event->response_type & ~0x80) {
 	  case XCB_KEY_PRESS: {
 	    const auto key = (const xcb_key_press_event_t*) event;
-	    if (key->detail == 9) running = false;
+	    if (key->detail == 9) running = False;
 	    if (key->detail == 38) camera.move (rei::Camera::Direction::Left, deltaTime);
 	    if (key->detail == 40) camera.move (rei::Camera::Direction::Right, deltaTime);
 	    if (key->detail == 25) camera.move (rei::Camera::Direction::Forward, deltaTime);
@@ -393,7 +392,7 @@ int main () {
 
 	  case XCB_MOTION_NOTIFY: {
 	    const auto data = (const xcb_motion_notify_event_t*) event;
-	    camera.handleMouseMovement ((float) data->event_x, (float) data->event_y);
+	    camera.handleMouseMovement ((Float32) data->event_x, (Float32) data->event_y);
 	  } break;
 
 	  default: break;
@@ -410,7 +409,7 @@ int main () {
       VK_CHECK (vkWaitForFences (device, 1, &currentFrame->renderFence, VK_TRUE, ~0ull));
       VK_CHECK (vkResetFences (device, 1, &currentFrame->renderFence));
 
-      uint32_t imageIndex = 0;
+      Uint32 imageIndex = 0;
       VK_CHECK (vkAcquireNextImageKHR (
         device,
 	swapchain.handle,
@@ -496,7 +495,7 @@ int main () {
     size_t size = 0;
     VK_CHECK (vkGetPipelineCacheData (device, pipelineCache, &size, nullptr));
 
-    uint8_t* data = MALLOC (uint8_t, size);
+    Uint8* data = MALLOC (Uint8, size);
     VK_CHECK (vkGetPipelineCacheData (device, pipelineCache, &size, data));
 
     FILE* cacheFile = fopen ("pipeline.cache", "wb");
@@ -512,7 +511,7 @@ int main () {
   vkDestroyFence (device, transferContext.fence, nullptr);
   vkDestroyCommandPool (device, transferContext.commandPool, nullptr);
 
-  for (uint8_t index = 0; index < FRAMES_COUNT; ++index) {
+  for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
     auto current = &frames[index];
     vkDestroySemaphore (device, current->presentSemaphore, nullptr);
     vkDestroySemaphore (device, current->renderSemaphore, nullptr);
@@ -520,7 +519,7 @@ int main () {
     vkDestroyCommandPool (device, current->commandPool, nullptr);
   }
 
-  for (uint32_t index = 0; index < swapchain.imagesCount; ++index)
+  for (Uint32 index = 0; index < swapchain.imagesCount; ++index)
     vkDestroyFramebuffer (device, framebuffers[index], nullptr);
 
   free (framebuffers);

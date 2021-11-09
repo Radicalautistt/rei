@@ -14,9 +14,9 @@ void lookAt (
   auto x = m128::normalize (m128::crossProduct (z, up->load ()));
   auto y = m128::crossProduct (x, z);
 
-  float dotXEye = _mm_cvtss_f32 (m128::dotProduct (x, eyeM128));
-  float dotYEye = _mm_cvtss_f32 (m128::dotProduct (y, eyeM128));
-  float dotZEye = _mm_cvtss_f32 (m128::dotProduct (z, eyeM128));
+  Float32 dotXEye = _mm_cvtss_f32 (m128::dotProduct (x, eyeM128));
+  Float32 dotYEye = _mm_cvtss_f32 (m128::dotProduct (y, eyeM128));
+  Float32 dotZEye = _mm_cvtss_f32 (m128::dotProduct (z, eyeM128));
 
   struct {
     Vector3 x, y, z;
@@ -51,14 +51,14 @@ void lookAt (
 
 // This function is basically stolen from GLM
 void perspective (
-  float verticalFOV,
-  float aspectRatio,
-  float zNear,
-  float zFar,
+  Float32 verticalFOV,
+  Float32 aspectRatio,
+  Float32 zNear,
+  Float32 zFar,
   Matrix4& output) noexcept {
 
-  float zLength = zFar - zNear;
-  float focalLength = 1.f / tanf (verticalFOV / 2.f);
+  Float32 zLength = zFar - zNear;
+  Float32 focalLength = 1.f / tanf (verticalFOV / 2.f);
 
   output[0] = {focalLength / aspectRatio, 0.f, 0.f, 0.f};
   output[1] = {0.f, -focalLength, 0.f, 0.f};

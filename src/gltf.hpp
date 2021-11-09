@@ -1,12 +1,13 @@
 #ifndef GLTF_HPP
 #define GLTF_HPP
 
-#include <stdint.h>
 #include <stddef.h>
+
+#include "common.hpp"
 
 namespace rei::assets::gltf {
 
-enum class AccessorComponentType : uint32_t {
+enum class AccessorComponentType : Uint32 {
   Int8,
   Int16,
   Float,
@@ -17,7 +18,7 @@ enum class AccessorComponentType : uint32_t {
   Unknown
 };
 
-enum class AccessorType : uint32_t {
+enum class AccessorType : Uint32 {
   Vec2,
   Vec3,
   Vec4,
@@ -29,7 +30,7 @@ enum class AccessorType : uint32_t {
   Unknown
 };
 
-enum class TopologyType : uint32_t {
+enum class TopologyType : Uint32 {
   Lines,
   Points,
   LineLoop,
@@ -41,7 +42,7 @@ enum class TopologyType : uint32_t {
   Unknown
 };
 
-enum class AlphaMode : uint32_t {
+enum class AlphaMode : Uint32 {
   Mask,
   Blend,
   Opaque,
@@ -49,7 +50,7 @@ enum class AlphaMode : uint32_t {
   Unknown
 };
 
-enum class MimeType : uint8_t {
+enum class MimeType : Uint8 {
   Png,
   Jpeg,
 
@@ -60,15 +61,15 @@ struct Accessor {
   AccessorType type;
   AccessorComponentType componentType;
 
-  uint32_t count;
-  uint32_t bufferView;
-  uint32_t byteOffset;
+  Uint32 count;
+  Uint32 bufferView;
+  Uint32 byteOffset;
 };
 
 struct BufferView {
-  uint32_t buffer;
-  uint32_t byteLength;
-  uint32_t byteOffset;
+  Uint32 buffer;
+  Uint32 byteLength;
+  Uint32 byteOffset;
 };
 
 struct Image {
@@ -77,24 +78,24 @@ struct Image {
 };
 
 struct Texture {
-  uint32_t source;
+  Uint32 source;
 };
 
 struct Material {
   AlphaMode alphaMode;
   // PBR metallic rougness
-  uint32_t baseColorTexture;
+  Uint32 baseColorTexture;
 };
 
 struct Primitive {
-  uint32_t indices;
-  uint32_t material;
+  Uint32 indices;
+  Uint32 material;
 
   struct {
-    uint32_t uv;
-    uint32_t normal;
-    uint32_t tangent;
-    uint32_t position;
+    Uint32 uv;
+    Uint32 normal;
+    Uint32 tangent;
+    Uint32 position;
   } attributes;
   TopologyType mode;
 };
@@ -105,7 +106,7 @@ struct Mesh {
 };
 
 struct Data {
-  uint8_t* buffer;
+  Uint8* buffer;
   size_t bufferSize;
 
   BufferView* bufferViews;
@@ -128,10 +129,10 @@ struct Data {
 
 [[nodiscard]] MimeType parseMimeType (const char* rawType) noexcept;
 [[nodiscard]] AlphaMode parseAlphaMode (const char* rawMode) noexcept;
-[[nodiscard]] TopologyType parsePrimitiveMode (uint64_t mode) noexcept;
-[[nodiscard]] uint8_t countComponents (AccessorType accessorType) noexcept;
+[[nodiscard]] TopologyType parsePrimitiveMode (Uint64 mode) noexcept;
+[[nodiscard]] Uint8 countComponents (AccessorType accessorType) noexcept;
 [[nodiscard]] AccessorType parseAccessorType (const char* rawType) noexcept;
-[[nodiscard]] AccessorComponentType parseAccessorComponentType (uint64_t type) noexcept;
+[[nodiscard]] AccessorComponentType parseAccessorComponentType (Uint64 type) noexcept;
 
 void load (const char* relativePath, Data* output);
 void destroy (Data* data);
