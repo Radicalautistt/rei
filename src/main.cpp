@@ -377,7 +377,10 @@ int main () {
       Float32 currentTime = rei::utils::Timer::getCurrentTime ();
       deltaTime = currentTime - lastTime;
       lastTime = currentTime;
-      ImGui::GetIO().DeltaTime = deltaTime;
+
+      // NOTE IMGUI asserts that deltaTime > 0.f, hence this check.
+      Float32 imguiDeltaTime[2] {1.f / 60.f, deltaTime};
+      ImGui::GetIO().DeltaTime = imguiDeltaTime[deltaTime > 0.f];
 
       while ((event = xcb_poll_for_event (window.connection))) {
 	switch (event->response_type & ~0x80) {
@@ -447,7 +450,7 @@ int main () {
         sponza.draw (currentFrame->commandBuffer, &mvp);
 
         imguiContext.newFrame ();
-        ImGui::ShowMetricsWindow ();
+	rei::imgui::showDebugWindow (&camera.speed, allocator);
         ImGui::Render ();
         const ImDrawData* drawData = ImGui::GetDrawData ();
         imguiContext.updateBuffers (frameIndex, drawData);

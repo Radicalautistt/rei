@@ -448,4 +448,53 @@ void destroy (Context* context) {
   ImGui::DestroyContext (context->handle);
 }
 
+void showDebugWindow (Float32* cameraSpeed, VmaAllocator allocator) {
+  const ImGuiIO& io = ImGui::GetIO ();
+  ImGui::Begin ("REI Debug window");
+  ImGui::SetWindowPos ({0.f, 0.f});
+  ImGui::SetWindowSize ({320, 250});
+
+  static size_t usedBytes;
+  static size_t freeBytes;
+  static Uint32 frameIndex;
+  static Uint32 allocationCount;
+
+  ImGui::Text ("Frames rendered: %u\nAverage frame time: %.3f ms (%.1f FPS)", frameIndex++, 1000.f / io.Framerate, io.Framerate);
+  ImGui::Separator ();
+
+  ImGui::Text ("IMGUI data: %d (Vertices) %d (Indices)", io.MetricsRenderVertices, io.MetricsRenderIndices);
+  ImGui::Separator ();
+
+  ImGui::Text ("Vulkan memory allocator stats:");
+  ImGui::SameLine ();
+  if (ImGui::Button ("Update")) {
+    VmaStats stats;
+    vmaCalculateStats (allocator, &stats);
+    usedBytes = stats.total.usedBytes;
+    freeBytes = stats.total.unusedBytes;
+    allocationCount = stats.total.allocationCount;
+  }
+
+  ImGui::Indent (15.f);
+  ImGui::Text ("Number of allocations: %d\nUsed bytes: %zu\nFree bytes: %zu", allocationCount, usedBytes, freeBytes);
+  ImGui::Unindent (15.f);
+  ImGui::Separator ();
+
+  ImGui::Text ("Window backend: %s", io.BackendPlatformName);
+  ImGui::Separator ();
+
+  static bool demoWindow = false;
+  ImGui::Checkbox ("Show IMGUI demo window", &demoWindow);
+  if (demoWindow) ImGui::ShowDemoWindow ();
+  ImGui::Separator ();
+
+  ImGui::Text ("Camera speed: %.1f", *cameraSpeed);
+  ImGui::SameLine ();
+  if (ImGui::Button ("-")) *cameraSpeed -= 20.f;
+  ImGui::SameLine ();
+  if (ImGui::Button ("+")) *cameraSpeed += 20.f;
+
+  ImGui::End ();
+}
+
 }

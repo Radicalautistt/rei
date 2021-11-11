@@ -64,6 +64,8 @@ struct Context {
 void create (const ContextCreateInfo* createInfo, Context* output);
 void destroy (Context* context);
 
+void showDebugWindow (Float32* cameraSpeed, VmaAllocator allocator);
+
 };
 
 #endif /* IMGUI_HPP */
