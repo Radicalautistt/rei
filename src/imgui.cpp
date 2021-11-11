@@ -94,8 +94,8 @@ void Context::handleEvents (const xcb_generic_event_t* event) {
   switch (event->response_type & ~0x80) {
     case XCB_BUTTON_PRESS: {
       const auto button = (const xcb_button_press_event_t*) event;
-      if (button->detail == 1) mouseButtonsDown[0] = True;
-      if (button->detail == 3) mouseButtonsDown[1] = True;
+      mouseButtonsDown[0] = button->detail == MOUSE_LEFT;
+      mouseButtonsDown[1] = button->detail == MOUSE_RIGHT;
     } break;
     default: break;
   }
@@ -208,7 +208,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
 
   { // Create font texture
     Int32 width, height;
-    unsigned char* pixels;
+    Uint8* pixels;
     ImGuiIO& io = ImGui::GetIO ();
     io.Fonts->GetTexDataAsRGBA32 (&pixels, &width, &height);
 
@@ -228,6 +228,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
       &output->fontTexture
     );
 
+    io.Fonts->ClearTexData ();
     io.Fonts->SetTexID ((ImTextureID) ((intptr_t) output->fontTexture.handle));
   }
 

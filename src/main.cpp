@@ -386,11 +386,14 @@ int main () {
 	switch (event->response_type & ~0x80) {
 	  case XCB_KEY_PRESS: {
 	    const auto key = (const xcb_key_press_event_t*) event;
-	    if (key->detail == 9) running = False;
-	    if (key->detail == 38) camera.move (rei::Camera::Direction::Left, deltaTime);
-	    if (key->detail == 40) camera.move (rei::Camera::Direction::Right, deltaTime);
-	    if (key->detail == 25) camera.move (rei::Camera::Direction::Forward, deltaTime);
-	    if (key->detail == 39) camera.move (rei::Camera::Direction::Backward, deltaTime);
+	    switch (key->detail) {
+	      case KEY_ESCAPE: running = False; break;
+	      case KEY_A: camera.move (rei::Camera::Direction::Left, deltaTime); break;
+	      case KEY_D: camera.move (rei::Camera::Direction::Right, deltaTime); break;
+	      case KEY_W: camera.move (rei::Camera::Direction::Forward, deltaTime); break;
+	      case KEY_S: camera.move (rei::Camera::Direction::Backward, deltaTime); break;
+	      default: break;
+	    }
           } break;
 
 	  case XCB_MOTION_NOTIFY: {
