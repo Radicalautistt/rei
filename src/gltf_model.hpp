@@ -15,9 +15,7 @@ struct Vertex {
 
 struct Material {
   size_t albedoIndex;
-  VkSampler albedoSampler;
   VkDescriptorSet descriptorSet;
-  VkDescriptorSetLayout descriptorSetLayout;
 };
 
 // This is used to group multiple primitives with the same material
@@ -28,10 +26,12 @@ struct Batch {
 };
 
 struct Model {
+  VkSampler sampler;
   VkPipeline pipeline;
   VkPipelineLayout pipelineLayout;
 
   VkDescriptorPool descriptorPool;
+  VkDescriptorSetLayout albedoLayout;
 
   Material* materials;
   size_t materialsCount;
@@ -46,8 +46,7 @@ struct Model {
 
   math::Matrix4 modelMatrix;
 
-  void initDescriptorPool (VkDevice device);
-  void initMaterialDescriptors (VkDevice device);
+  void initDescriptors (VkDevice device);
 
   void initPipelines (
     VkDevice device,

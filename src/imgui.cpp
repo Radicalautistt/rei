@@ -203,8 +203,8 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     allocationInfo.compressed = False;
     allocationInfo.compressedSize = 0;
     allocationInfo.width = (Uint32) width;
+    allocationInfo.pixels = (char*) pixels;
     allocationInfo.height = (Uint32) height;
-    allocationInfo.pixels = (const char*) pixels;
 
     vku::allocateTexture (
       output->device,

@@ -189,8 +189,6 @@ void load (
   free (indices);
 
   output->modelMatrix = {1.f};
-  math::Vector3 translation {0.f, 0.f, 0.f};
-  math::Matrix4::translate (&output->modelMatrix, &translation);
   math::Matrix4::scale (&output->modelMatrix, &gltf.scaleVector);
 
   output->texturesCount = gltf.imagesCount;
@@ -236,11 +234,8 @@ void destroy (VkDevice device, VmaAllocator allocator, Model* model) {
   vmaDestroyBuffer (allocator, model->indexBuffer.handle, model->indexBuffer.allocation);
   vmaDestroyBuffer (allocator, model->vertexBuffer.handle, model->vertexBuffer.allocation);
 
-  for (size_t index = 0; index < model->materialsCount; ++index) {
-    auto current = &model->materials[index];
-    vkDestroySampler (device, current->albedoSampler, nullptr);
-    vkDestroyDescriptorSetLayout (device, current->descriptorSetLayout, nullptr);
-  }
+  vkDestroySampler (device, model->sampler, nullptr);
+  vkDestroyDescriptorSetLayout (device, model->albedoLayout, nullptr);
 
   free (model->materials);
 
@@ -256,72 +251,80 @@ void destroy (VkDevice device, VmaAllocator allocator, Model* model) {
   free (model->batches);
 }
 
-void Model::initMaterialDescriptors (VkDevice device) {
+void Model::initDescriptors (VkDevice device) {
+  {
+    VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (Uint32) texturesCount};
+
+    VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
+    createInfo.poolSizeCount = 1;
+    createInfo.pPoolSizes = &poolSize;
+    createInfo.maxSets = (Uint32) materialsCount;
+
+    VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &descriptorPool));
+  }
+
+  {
+    VkSamplerCreateInfo createInfo {SAMPLER_CREATE_INFO};
+    createInfo.minFilter = VK_FILTER_LINEAR;
+    createInfo.magFilter = VK_FILTER_LINEAR;
+    createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+    VK_CHECK (vkCreateSampler (device, &createInfo, nullptr, &sampler));
+  }
+
+  {
+    VkDescriptorSetLayoutBinding albedo;
+    albedo.binding = 0;
+    albedo.descriptorCount = 1;
+    albedo.pImmutableSamplers = nullptr;
+    albedo.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    albedo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+    VkDescriptorSetLayoutCreateInfo createInfo {DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    createInfo.bindingCount = 1;
+    createInfo.pBindings = &albedo;
+
+    VK_CHECK (vkCreateDescriptorSetLayout (device, &createInfo, nullptr, &albedoLayout));
+  }
+
+  // Batch all descriptor writes to make a single vkUpdateDescriptorSets call.
+  auto writes = MALLOC (VkWriteDescriptorSet, materialsCount);
+  auto imageInfos = MALLOC (VkDescriptorImageInfo, materialsCount);
+
+  memset (writes, 0, sizeof (VkWriteDescriptorSet) * materialsCount);
+
   for (size_t index = 0; index < materialsCount; ++index) {
     auto current = &materials[index];
 
     {
-      VkDescriptorSetLayoutBinding albedo;
-      albedo.binding = 0;
-      albedo.descriptorCount = 1;
-      albedo.pImmutableSamplers = nullptr;
-      albedo.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-      albedo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-
-      VkDescriptorSetLayoutCreateInfo createInfo {DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-      createInfo.bindingCount = 1;
-      createInfo.pBindings = &albedo;
-
-      VK_CHECK (vkCreateDescriptorSetLayout (device, &createInfo, nullptr, &current->descriptorSetLayout));
-    }
-
-    {
       VkDescriptorSetAllocateInfo allocationInfo {DESCRIPTOR_SET_ALLOCATE_INFO};
       allocationInfo.descriptorSetCount = 1;
+      allocationInfo.pSetLayouts = &albedoLayout;
       allocationInfo.descriptorPool = descriptorPool;
-      allocationInfo.pSetLayouts = &current->descriptorSetLayout;
 
       VK_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &current->descriptorSet));
     }
 
-    {
-      // TODO get filtering, etc from gltf samplers
-      VkSamplerCreateInfo createInfo {SAMPLER_CREATE_INFO};
-      createInfo.minFilter = VK_FILTER_LINEAR;
-      createInfo.magFilter = VK_FILTER_LINEAR;
-      createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-      createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-      createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-      createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    auto albedoInfo = &imageInfos[index];
+    albedoInfo->sampler = sampler;
+    albedoInfo->imageView = textures[current->albedoIndex].view;
+    albedoInfo->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-      VK_CHECK (vkCreateSampler (device, &createInfo, nullptr, &current->albedoSampler));
-    }
-
-    VkDescriptorImageInfo albedoInfo;
-    albedoInfo.sampler = current->albedoSampler;
-    albedoInfo.imageView = textures[current->albedoIndex].view;
-    albedoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    VkWriteDescriptorSet write {WRITE_DESCRIPTOR_SET};
-    write.dstBinding = 0;
-    write.descriptorCount = 1;
-    write.pImageInfo = &albedoInfo;
-    write.dstSet = current->descriptorSet;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-
-    vkUpdateDescriptorSets (device, 1, &write, 0, nullptr);
+    auto write = &writes[index];
+    write->dstBinding = 0;
+    write->descriptorCount = 1;
+    write->sType = WRITE_DESCRIPTOR_SET;
+    write->pImageInfo = &imageInfos[index];
+    write->dstSet = current->descriptorSet;
+    write->descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
   }
-}
 
-void Model::initDescriptorPool (VkDevice device) {
-  VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (Uint32) texturesCount};
-
-  VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
-  createInfo.poolSizeCount = 1;
-  createInfo.pPoolSizes = &poolSize;
-  createInfo.maxSets = (Uint32) materialsCount;
-
-  VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &descriptorPool));
+  vkUpdateDescriptorSets (device, (Uint32) materialsCount, writes, 0, nullptr);
+  free (writes);
+  free (imageInfos);
 }
 
 void Model::initPipelines (
@@ -341,7 +344,7 @@ void Model::initPipelines (
     createInfo.pushConstantRangeCount = 1;
     createInfo.pPushConstantRanges = &pushConstantRange;
     // TODO create different pipelines for every sampler combination (e.g albedo, albedo + normal, etc)
-    createInfo.pSetLayouts = &materials[0].descriptorSetLayout;
+    createInfo.pSetLayouts = &albedoLayout;
 
     VK_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &pipelineLayout));
   }

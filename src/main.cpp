@@ -358,8 +358,7 @@ int main () {
   }
 
   rei::gltf::load (device, allocator, &transferContext, "assets/models/sponza-scene/Sponza.gltf", &sponza);
-  sponza.initDescriptorPool (device);
-  sponza.initMaterialDescriptors (device);
+  sponza.initDescriptors (device);
   sponza.initPipelines (device, renderPass, pipelineCache, &swapchain);
 
   { // Render loop
