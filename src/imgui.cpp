@@ -10,68 +10,66 @@ namespace rei::imgui {
 static Bool32 mouseButtonsDown[2];
 
 void Context::updateBuffers (Uint32 frameIndex, const ImDrawData* drawData) {
-  if (drawData->TotalVtxCount) {
-    counts.index = drawData->TotalIdxCount;
-    counts.vertex = drawData->TotalVtxCount;
+  counts.index = drawData->TotalIdxCount;
+  counts.vertex = drawData->TotalVtxCount;
 
-    VkDeviceSize indexBufferSize = sizeof (ImDrawIdx) * counts.index;
-    VkDeviceSize vertexBufferSize = sizeof (ImDrawVert) * counts.vertex;
+  VkDeviceSize indexBufferSize = sizeof (ImDrawIdx) * counts.index;
+  VkDeviceSize vertexBufferSize = sizeof (ImDrawVert) * counts.vertex;
 
-    auto vertexBuffer = &vertexBuffers[frameIndex];
+  auto vertexBuffer = &vertexBuffers[frameIndex];
 
-    if (vertexBuffer->size < vertexBufferSize) {
-      vmaUnmapMemory (allocator, vertexBuffer->allocation);
-      vmaDestroyBuffer (allocator, vertexBuffer->handle, vertexBuffer->allocation);
+  if (vertexBuffer->size < vertexBufferSize) {
+    vmaUnmapMemory (allocator, vertexBuffer->allocation);
+    vmaDestroyBuffer (allocator, vertexBuffer->handle, vertexBuffer->allocation);
 
-      vku::BufferAllocationInfo allocationInfo;
-      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-      allocationInfo.size = sizeof (ImDrawVert) * counts.vertex;
-      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-      allocationInfo.bufferUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-      allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    vku::BufferAllocationInfo allocationInfo;
+    allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    allocationInfo.size = sizeof (ImDrawVert) * counts.vertex;
+    allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    allocationInfo.bufferUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-      vku::allocateBuffer (allocator, &allocationInfo, vertexBuffer);
-      VK_CHECK (vmaMapMemory (allocator, vertexBuffer->allocation, &vertexBuffer->mapped));
-    }
-
-    auto indexBuffer = &indexBuffers[frameIndex];
-
-    if (indexBuffer->size < indexBufferSize) {
-      vmaUnmapMemory (allocator, indexBuffer->allocation);
-      vmaDestroyBuffer (allocator, indexBuffer->handle, indexBuffer->allocation);
-
-      vku::BufferAllocationInfo allocationInfo;
-      allocationInfo.size = sizeof (ImDrawIdx) * counts.index;
-      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-      allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-      allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-      allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-      vku::allocateBuffer (allocator, &allocationInfo, indexBuffer);
-      VK_CHECK (vmaMapMemory (allocator, indexBuffer->allocation, &indexBuffer->mapped));
-    }
-
-    auto indices = (ImDrawIdx*) indexBuffer->mapped;
-    auto vertices = (ImDrawVert*) vertexBuffer->mapped;
-
-    for (Int32 index = 0; index < drawData->CmdListsCount; ++index) {
-      const ImDrawList* current = drawData->CmdLists[index];
-
-      memcpy (indices, current->IdxBuffer.Data, sizeof (ImDrawIdx) * current->IdxBuffer.Size);
-      memcpy (vertices, current->VtxBuffer.Data, sizeof (ImDrawVert) * current->VtxBuffer.Size);
-
-      indices += current->IdxBuffer.Size;
-      vertices += current->VtxBuffer.Size;
-    }
-
-    VkDeviceSize offsets[2] {0, 0};
-    VkDeviceSize sizes[2] {vertexBufferSize, indexBufferSize};
-    VmaAllocation allocations[2] {vertexBuffer->allocation, indexBuffer->allocation};
-
-    VK_CHECK (vmaFlushAllocations (allocator, 2, allocations, offsets, sizes));
+    vku::allocateBuffer (allocator, &allocationInfo, vertexBuffer);
+    VK_CHECK (vmaMapMemory (allocator, vertexBuffer->allocation, &vertexBuffer->mapped));
   }
+
+  auto indexBuffer = &indexBuffers[frameIndex];
+
+  if (indexBuffer->size < indexBufferSize) {
+    vmaUnmapMemory (allocator, indexBuffer->allocation);
+    vmaDestroyBuffer (allocator, indexBuffer->handle, indexBuffer->allocation);
+
+    vku::BufferAllocationInfo allocationInfo;
+    allocationInfo.size = sizeof (ImDrawIdx) * counts.index;
+    allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    vku::allocateBuffer (allocator, &allocationInfo, indexBuffer);
+    VK_CHECK (vmaMapMemory (allocator, indexBuffer->allocation, &indexBuffer->mapped));
+  }
+
+  auto indices = (ImDrawIdx*) indexBuffer->mapped;
+  auto vertices = (ImDrawVert*) vertexBuffer->mapped;
+
+  for (Int32 index = 0; index < drawData->CmdListsCount; ++index) {
+    const ImDrawList* current = drawData->CmdLists[index];
+
+    memcpy (indices, current->IdxBuffer.Data, sizeof (ImDrawIdx) * current->IdxBuffer.Size);
+    memcpy (vertices, current->VtxBuffer.Data, sizeof (ImDrawVert) * current->VtxBuffer.Size);
+
+    indices += current->IdxBuffer.Size;
+    vertices += current->VtxBuffer.Size;
+  }
+
+  VkDeviceSize offsets[2] {0, 0};
+  VkDeviceSize sizes[2] {vertexBufferSize, indexBufferSize};
+  VmaAllocation allocations[2] {vertexBuffer->allocation, indexBuffer->allocation};
+
+  VK_CHECK (vmaFlushAllocations (allocator, 2, allocations, offsets, sizes));
 }
 
 void Context::newFrame () {
@@ -114,16 +112,6 @@ void Context::renderDrawData (VkCommandBuffer commandBuffer, Uint32 frameIndex, 
   vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
   {
-    VkViewport viewport;
-    viewport.x = 0;
-    viewport.y = 0;
-    viewport.width = 1680;
-    viewport.height = 1050;
-    viewport.minDepth = 0.f;
-    viewport.maxDepth = 1.f;
-
-    vkCmdSetViewport (commandBuffer, 0, 1, &viewport);
-
     math::Vector2 pushConstants[2];
     pushConstants[1] = math::Vector2 {-1.f};
     pushConstants[0] = math::Vector2 {2.f / 1680.f, 2.f / 1050.f};
@@ -138,41 +126,39 @@ void Context::renderDrawData (VkCommandBuffer commandBuffer, Uint32 frameIndex, 
     );
   }
 
-  if (drawData->CmdListsCount) {
-    VkDeviceSize offset = 0;
-    Int32 vertexOffset = 0;
-    Uint32 indexOffset = 0;
+  VkDeviceSize offset = 0;
+  Int32 vertexOffset = 0;
+  Uint32 indexOffset = 0;
 
-    vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffers[frameIndex].handle, &offset);
-    vkCmdBindIndexBuffer (commandBuffer, indexBuffers[frameIndex].handle, 0, VK_INDEX_TYPE_UINT16);
+  vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffers[frameIndex].handle, &offset);
+  vkCmdBindIndexBuffer (commandBuffer, indexBuffers[frameIndex].handle, 0, VK_INDEX_TYPE_UINT16);
 
-    for (Int32 list = 0; list < drawData->CmdListsCount; ++list) {
-      const ImDrawList* commandList = drawData->CmdLists[list];
+  for (Int32 list = 0; list < drawData->CmdListsCount; ++list) {
+    const ImDrawList* commandList = drawData->CmdLists[list];
 
-      for (Int32 command = 0; command < commandList->CmdBuffer.Size; ++command) {
-	const ImDrawCmd* drawCommand = &commandList->CmdBuffer[command];
+    for (Int32 command = 0; command < commandList->CmdBuffer.Size; ++command) {
+      const ImDrawCmd* drawCommand = &commandList->CmdBuffer[command];
 
-	VkRect2D scissor;
-	scissor.offset.x = MAX ((Int32) drawCommand->ClipRect.x, 0);
-	scissor.offset.y = MAX ((Int32) drawCommand->ClipRect.y, 0);
-	scissor.extent.width = (Uint32) (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
-	scissor.extent.height = (Uint32) (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
+      VkRect2D scissor;
+      scissor.offset.x = MAX ((Int32) drawCommand->ClipRect.x, 0);
+      scissor.offset.y = MAX ((Int32) drawCommand->ClipRect.y, 0);
+      scissor.extent.width = (Uint32) (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
+      scissor.extent.height = (Uint32) (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
 
-	vkCmdSetScissor (commandBuffer, 0, 1, &scissor);
+      vkCmdSetScissor (commandBuffer, 0, 1, &scissor);
 
-	vkCmdDrawIndexed (
-	  commandBuffer,
-	  drawCommand->ElemCount,
-	  1,
-	  drawCommand->IdxOffset + indexOffset,
-	  drawCommand->VtxOffset + vertexOffset,
-          0
-	);
-      }
-
-      indexOffset += commandList->IdxBuffer.Size;
-      vertexOffset += commandList->VtxBuffer.Size;
+      vkCmdDrawIndexed (
+        commandBuffer,
+        drawCommand->ElemCount,
+        1,
+        drawCommand->IdxOffset + indexOffset,
+        drawCommand->VtxOffset + vertexOffset,
+        0
+      );
     }
+
+    indexOffset += commandList->IdxBuffer.Size;
+    vertexOffset += commandList->VtxBuffer.Size;
   }
 }
 
@@ -333,18 +319,24 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo {PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
+    VkViewport viewport;
+    viewport.x = 0;
+    viewport.y = 0;
+    viewport.width = 1680;
+    viewport.height = 1050;
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+
     VkPipelineViewportStateCreateInfo viewportInfo {PIPELINE_VIEWPORT_STATE_CREATE_INFO};
     viewportInfo.scissorCount = 1;
     viewportInfo.viewportCount = 1;
+    viewportInfo.pViewports = &viewport;
 
-    VkDynamicState dynamicStates[2] {
-      VK_DYNAMIC_STATE_SCISSOR,
-      VK_DYNAMIC_STATE_VIEWPORT
-    };
+    VkDynamicState dynamicState = VK_DYNAMIC_STATE_SCISSOR;
 
     VkPipelineDynamicStateCreateInfo dynamicInfo {PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-    dynamicInfo.pDynamicStates = dynamicStates;
-    dynamicInfo.dynamicStateCount = ARRAY_SIZE (dynamicStates);
+    dynamicInfo.dynamicStateCount = 1;
+    dynamicInfo.pDynamicStates = &dynamicState;
 
     VkPipelineRasterizationStateCreateInfo rasterizationInfo {PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     rasterizationInfo.lineWidth = 1.f;
