@@ -3,11 +3,13 @@
 #include <string.h>
 #include <dirent.h>
 
+#include "vkutils.hpp"
 #include "asset_baker.hpp"
 
 #include <lz4/lib/lz4.h>
 #include <stb/stb_image.h>
 #include <stb/stb_sprintf.h>
+#include <rapidjson/document.h>
 #include <stb/stb_image_resize.h>
 
 namespace rei::assets {
@@ -21,7 +23,7 @@ void bakeImage (const char* relativePath) {
   char outputPath[256] {};
   strcpy (outputPath, relativePath);
   char* extension = strrchr (outputPath, '.');
-  strcpy (extension + 1, "rtex");
+  memcpy (extension + 1, "rtex", 5);
 
   FILE* outputFile = fopen (outputPath, "wb");
 
@@ -127,23 +129,28 @@ void bakeImages (const char* relativePath) {
   closedir (directory);
 }
 
-Result readAsset (const char* relativePath, simdjson::ondemand::parser* parser, Asset* output) {
+Result readImage (const char* relativePath, vku::TextureAllocationInfo* output) {
   FILE* assetFile = fopen (relativePath, "rb");
   if (!assetFile) return Result::FileDoesNotExist;
 
   size_t metadataSize = 0;
   fread (&metadataSize, sizeof (size_t), 1, assetFile);
 
-  output->metadata = MALLOC (char, metadataSize);
-  fread (output->metadata, 1, metadataSize, assetFile);
-  output->metadata[metadataSize] = '\0';
+  char* metadata = ALLOCA (char, metadataSize);
+  fread (metadata, 1, metadataSize, assetFile);
+  metadata[metadataSize] = '\0';
 
-  simdjson::padded_string paddedMetadata {output->metadata, strlen (output->metadata)};
-  simdjson::ondemand::document metadata = parser->iterate (paddedMetadata);
-  output->size = (size_t) metadata["binarySize"].get_uint64 ();
+  rapidjson::Document parsedMetadata;
+  parsedMetadata.Parse (metadata);
 
-  output->data = MALLOC (char, output->size);
-  fread (output->data, 1, output->size, assetFile);
+  output->compressed = True;
+  output->width = parsedMetadata["width"].GetUint ();
+  output->height = parsedMetadata["height"].GetUint ();
+  output->mipLevels = parsedMetadata["mipLevels"].GetUint ();
+  output->compressedSize = (size_t) parsedMetadata["binarySize"].GetUint64 ();
+
+  output->pixels = MALLOC (char, output->compressedSize);
+  fread (output->pixels, 1, output->compressedSize, assetFile);
 
   fclose (assetFile);
   return Result::Success;

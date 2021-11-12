@@ -3,8 +3,7 @@ rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(su
 includePaths = -isystem third-party/
 linkPaths = -L third-party/lz4/lib/
 linkPaths += -L third-party/imgui/
-linkPaths += -L third-party/simdjson/
-links = -ldl -lm -lxcb -llz4 -lIMGUI -lSimdjson
+links = -ldl -lm -lxcb -llz4 -lIMGUI
 
 flags = -std=c++17 -Wall -Wextra -Wpadded -Wconversion -Og -march=native -Wno-missing-field-initializers -g
 sourceFiles = $(call rwildcard, src, *.cpp, *.hpp, *.h)

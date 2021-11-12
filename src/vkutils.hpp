@@ -106,7 +106,7 @@ struct TextureAllocationInfo {
   Bool32 compressed;
   Uint32 mipLevels;
   Uint32 width, height;
-  const char* pixels;
+  char* pixels;
   size_t compressedSize;
 };
 

@@ -69,9 +69,9 @@ void load (
 
   output->batches = MALLOC (Batch, gltf.materialsCount);
 
-  #define GET_ACCESSOR(attribute, result) do {                                             \
-    const auto accessor = &gltf.accessors[currentPrimitive->attributes.attribute];         \
-    const auto bufferView = &gltf.bufferViews[accessor->bufferView];                       \
+  #define GET_ACCESSOR(attribute, result) do {                                               \
+    const auto accessor = &gltf.accessors[currentPrimitive->attributes.attribute];           \
+    const auto bufferView = &gltf.bufferViews[accessor->bufferView];                         \
     result = (const Float32*) (&gltf.buffer[accessor->byteOffset + bufferView->byteOffset]); \
   } while (0)
 
@@ -79,6 +79,9 @@ void load (
   Uint32 batchOffset = 0;
   Uint32 currentMaterial = 0;
   Uint32 currentIndexCount = 0;
+
+  const size_t vec2Size = sizeof (Float32) * 2;
+  const size_t vec3Size = sizeof (Float32) * 3;
 
   for (size_t primitive = 0; primitive < gltf.mesh.primitivesCount; ++primitive) {
     const auto currentPrimitive = &gltf.mesh.primitives[primitive];
@@ -98,9 +101,9 @@ void load (
     for (Uint32 vertex = 0; vertex < currentVertexCount; ++vertex) {
       auto newVertex = &vertices[vertexOffset++];
 
-      memcpy (&newVertex->u, &uvAccessor[vertex * 2], sizeof (Float32) * 2);
-      memcpy (&newVertex->nx, &normalAccessor[vertex * 3], sizeof (Float32) * 3);
-      memcpy (&newVertex->x, &positionAccessor[vertex * 3], sizeof (Float32) * 3);
+      memcpy (&newVertex->u, &uvAccessor[vertex * 2], vec2Size);
+      memcpy (&newVertex->nx, &normalAccessor[vertex * 3], vec3Size);
+      memcpy (&newVertex->x, &positionAccessor[vertex * 3], vec3Size);
     }
 
     const auto accessor = &gltf.accessors[currentPrimitive->indices];
@@ -189,32 +192,19 @@ void load (
   output->texturesCount = gltf.imagesCount;
   output->textures = MALLOC (vku::Image, gltf.imagesCount);
 
-  simdjson::ondemand::parser parser;
+  char texturePath[256] {};
+  strcpy (texturePath, relativePath);
+  char* fileName = strrchr (texturePath, '/');
 
   for (size_t index = 0; index < gltf.imagesCount; ++index) {
     const auto current = &gltf.images[index];
 
-    char texturePath[256] {};
-    strcpy (texturePath, relativePath);
-
-    char* fileName = strrchr (texturePath, '/');
     strcpy (fileName + 1, current->uri);
     char* extension = strrchr (texturePath, '.');
-    strcpy (extension + 1, "rtex");
-
-    assets::Asset asset;
-    REI_CHECK (assets::readAsset (texturePath, &parser, &asset));
-
-    simdjson::padded_string paddedMetadata {asset.metadata, strlen (asset.metadata)};
-    simdjson::ondemand::document metadata = parser.iterate (paddedMetadata);
+    memcpy (extension + 1, "rtex", 5);
 
     vku::TextureAllocationInfo allocationInfo;
-    allocationInfo.compressed = True;
-    allocationInfo.pixels = asset.data;
-    allocationInfo.compressedSize = asset.size;
-    allocationInfo.width = (Uint32) metadata["width"].get_uint64 ();
-    allocationInfo.height = (Uint32) metadata["height"].get_uint64 ();
-    allocationInfo.mipLevels = (Uint32) metadata["mipLevels"].get_uint64 ();
+    REI_CHECK (assets::readImage (texturePath, &allocationInfo));
 
     vku::allocateTexture (
       device,
@@ -224,8 +214,7 @@ void load (
       &output->textures[index]
     );
 
-    free (asset.data);
-    free (asset.metadata);
+    free (allocationInfo.pixels);
   }
 
   output->materialsCount = gltf.materialsCount;
