@@ -123,6 +123,14 @@ void load (const char* relativePath, Data* output) {
     newAccessor->componentType = parseAccessorComponentType (accessor["componentType"].GetUint ());
   }
 
+  // Load scale vector
+  const auto& defaultNode = *parsedGLTF["nodes"].GetArray().Begin ();
+  const auto& scaleVector = defaultNode["scale"].GetArray ();
+
+  output->scaleVector.x = scaleVector[0].GetFloat ();
+  output->scaleVector.y = scaleVector[1].GetFloat ();
+  output->scaleVector.z = scaleVector[2].GetFloat ();
+
   // Load primitives
   const auto& defaultMesh = *parsedGLTF["meshes"].GetArray().Begin ();
   const auto& primitives = defaultMesh["primitives"].GetArray ();

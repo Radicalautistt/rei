@@ -166,10 +166,11 @@ typedef Uint32 Bool32;
 #endif
 
 #ifndef COUNT_CYCLES
-#  define COUNT_CYCLES(routine) do {                                                                       \
-     Uint64 start = __rdtsc ();                                                                            \
-     routine;                                                                                              \
-     LOG_INFO (ANSI_YELLOW "%s" ANSI_GREEN " took %llu cycles to comptute", #routine, __rdtsc () - start); \
+#  define COUNT_CYCLES(routine) do {                                                        \
+     Uint64 start = __rdtsc ();                                                             \
+     routine;                                                                               \
+     Uint64 end = __rdtsc () - start;                                                       \
+     LOG_INFO (ANSI_YELLOW "%s" ANSI_GREEN " took %llu cycles to comptute", #routine, end); \
    } while (0)
 #endif
 

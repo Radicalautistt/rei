@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+#include "math.hpp"
 #include "common.hpp"
 
 namespace rei::assets::gltf {
@@ -125,6 +126,8 @@ struct Data {
 
   Material* materials;
   size_t materialsCount;
+
+  math::Vector3 scaleVector;
 };
 
 [[nodiscard]] MimeType parseMimeType (const char* rawType) noexcept;

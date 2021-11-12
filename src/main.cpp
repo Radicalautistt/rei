@@ -25,7 +25,7 @@ struct Frame {
 
 int main () {
   rei::xcb::Window window;
-  rei::Camera camera {{0.f, 1.f, 0.f}, {0.f, 100.f, -10.f}, -90.f, 0.f};
+  rei::Camera camera {{0.f, 1.f, 0.f}, {0.f, 1.f, 1.f}, -90.f, 0.f};
 
   VkInstance instance;
   #ifndef NDEBUG
@@ -55,9 +55,6 @@ int main () {
   rei::vku::TransferContext transferContext;
 
   rei::gltf::Model sponza;
-
-  rei::math::Matrix4 modelMatrix {1.f};
-  rei::math::Matrix4::translate (modelMatrix, {0.f, 0.f, 1.f});
 
   rei::utils::Timer::init ();
   rei::VulkanContext::init ();
@@ -449,8 +446,8 @@ int main () {
 	auto center = camera.position + camera.front;
         rei::math::lookAt (&camera.position, &center, &camera.up, &viewMatrix);
 
-        rei::math::Matrix4 mvp = camera.projection * viewMatrix * modelMatrix;
-        sponza.draw (currentFrame->commandBuffer, &mvp);
+        rei::math::Matrix4 viewProjection = camera.projection * viewMatrix;
+        sponza.draw (currentFrame->commandBuffer, &viewProjection);
 
         imguiContext.newFrame ();
 	rei::imgui::showDebugWindow (&camera.speed, allocator);

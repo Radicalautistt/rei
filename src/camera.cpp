@@ -46,8 +46,8 @@ void Camera::move (Direction direction, Float32 deltaTime) noexcept {
 }
 
 Camera::Camera (const math::Vector3& up, const math::Vector3& position, Float32 yaw, Float32 pitch)
-  : firstMouse {True}, zoom {45.f}, speed {530.f}, sensitivity {0.1f},
-  zFar {3000.f}, yaw {yaw}, pitch {pitch}, worldUp {up}, position {position} {
+  : firstMouse {True}, zoom {45.f}, speed {20.f}, sensitivity {0.1f},
+  zFar {100.f}, yaw {yaw}, pitch {pitch}, worldUp {up}, position {position} {
 
   update ();
   math::perspective (math::radians (zoom), 1680.f / 1050.f, 0.1f, zFar, projection);

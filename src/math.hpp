@@ -228,11 +228,17 @@ struct Matrix4 {
     return rows[index];
   }
 
-  static inline void translate (Matrix4& matrix, const Vector3& vector) noexcept {
-    matrix[3] =
-      matrix[0] * vector.x +
-      matrix[1] * vector.y +
-      matrix[2] * vector.z + matrix[3];
+  static inline void scale (Matrix4* matrix, const Vector3* vector) noexcept {
+    matrix->rows[0] = matrix->rows[0] * vector->x;
+    matrix->rows[1] = matrix->rows[1] * vector->y;
+    matrix->rows[2] = matrix->rows[2] * vector->z;
+  }
+
+  static inline void translate (Matrix4* matrix, const Vector3* vector) noexcept {
+    matrix->rows[3] =
+      matrix->rows[0] * vector->x +
+      matrix->rows[1] * vector->y +
+      matrix->rows[2] * vector->z + matrix->rows[3];
   }
 };
 

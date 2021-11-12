@@ -1,12 +1,9 @@
 #ifndef GLTF_MODEL_HPP
 #define GLTF_MODEL_HPP
 
+#include "math.hpp"
 #include "common.hpp"
 #include "vkutils.hpp"
-
-namespace rei::math {
-struct Matrix4;
-}
 
 namespace rei::gltf {
 
@@ -47,6 +44,8 @@ struct Model {
   vku::Buffer vertexBuffer;
   vku::Buffer indexBuffer;
 
+  math::Matrix4 modelMatrix;
+
   void initDescriptorPool (VkDevice device);
   void initMaterialDescriptors (VkDevice device);
 
@@ -57,7 +56,7 @@ struct Model {
     const vku::Swapchain* swapchain
   );
 
-  void draw (VkCommandBuffer commandBuffer, const math::Matrix4* mvp);
+  void draw (VkCommandBuffer commandBuffer, const math::Matrix4* viewProjection);
 };
 
 void load (

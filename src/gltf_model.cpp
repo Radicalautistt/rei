@@ -1,7 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "math.hpp"
 #include "gltf.hpp"
 #include "common.hpp"
 #include "gltf_model.hpp"
@@ -188,6 +187,11 @@ void load (
   }
 
   free (indices);
+
+  output->modelMatrix = {1.f};
+  math::Vector3 translation {0.f, 0.f, 0.f};
+  math::Matrix4::translate (&output->modelMatrix, &translation);
+  math::Matrix4::scale (&output->modelMatrix, &gltf.scaleVector);
 
   output->texturesCount = gltf.imagesCount;
   output->textures = MALLOC (vku::Image, gltf.imagesCount);
@@ -451,14 +455,15 @@ void Model::initPipelines (
   rei::vku::createGraphicsPipelines (device, pipelineCache, 1, createInfos, &pipeline);
 }
 
-void Model::draw (VkCommandBuffer commandBuffer, const math::Matrix4* mvp) {
+void Model::draw (VkCommandBuffer commandBuffer, const math::Matrix4* viewProjection) {
   vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
   VkDeviceSize offset = 0;
   vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffer.handle, &offset);
   vkCmdBindIndexBuffer (commandBuffer, indexBuffer.handle, 0, VK_INDEX_TYPE_UINT32);
 
-  vkCmdPushConstants (commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Matrix4), mvp);
+  math::Matrix4 mvp = *viewProjection * modelMatrix;
+  vkCmdPushConstants (commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Matrix4), &mvp);
 
   for (size_t index = 0; index < materialsCount; ++index) {
     const auto current = &batches[index];
