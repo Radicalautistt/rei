@@ -145,11 +145,6 @@ void createAttachment (
     ));
   }
 
-  const VkImageAspectFlags aspectMasks[2] {
-    VK_IMAGE_ASPECT_COLOR_BIT,
-    VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
-  };
-
   VkImageViewCreateInfo info {IMAGE_VIEW_CREATE_INFO};
   info.image = output->handle;
   info.format = output->format;
@@ -159,7 +154,7 @@ void createAttachment (
   info.subresourceRange.layerCount = 1;
   info.subresourceRange.baseMipLevel = 0;
   info.subresourceRange.baseArrayLayer = 0;
-  info.subresourceRange.aspectMask = aspectMasks[createInfo->usage == VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT];
+  info.subresourceRange.aspectMask = createInfo->aspectMask;
 
   VK_CHECK (vkCreateImageView (device, &info, nullptr, &output->view));
 }
@@ -280,7 +275,8 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
   AttachmentCreateInfo info;
   info.width = output->extent.width;
   info.height = output->extent.height;
-  info.format = VK_FORMAT_D24_UNORM_S8_UINT;
+  info.format = VK_FORMAT_X8_D24_UNORM_PACK32;
+  info.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
   info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
   createAttachment (createInfo->device, createInfo->allocator, &info, &output->depthImage);
@@ -311,66 +307,59 @@ void createShaderModule (VkDevice device, const char* relativePath, VkShaderModu
   free (shaderFile.contents);
 }
 
-void createGraphicsPipelines (
-  VkDevice device,
-  VkPipelineCache pipelineCache,
-  Uint32 count,
-  const GraphicsPipelineCreateInfo* createInfos,
-  VkPipeline* outputs) {
+void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* createInfo, VkPipeline* output) {
+  VkPipelineInputAssemblyStateCreateInfo inputAssemblyState {PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+  inputAssemblyState.primitiveRestartEnable = VK_FALSE;
+  inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-  auto shaders = MALLOC (Shaders, count);
-  auto infos = MALLOC (VkGraphicsPipelineCreateInfo, count);
-  memset (infos, 0, sizeof (VkGraphicsPipelineCreateInfo) * count);
+  VkPipelineMultisampleStateCreateInfo multisampleState {PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+  multisampleState.minSampleShading = 1.f;
+  multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-  for (Uint32 index = 0; index < count; ++index) {
-    // This naming is so horrible
-    auto info = &infos[index];
-    auto currentShader = &shaders[index];
-    const auto currentInfo = &createInfos[index];
+  VkPipelineColorBlendStateCreateInfo colorBlendState {PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+  colorBlendState.attachmentCount = 1;
+  colorBlendState.pAttachments = createInfo->colorBlendAttachment;
 
-    createShaderModule (device, currentInfo->vertexShaderPath, &currentShader->vertex);
-    createShaderModule (device, currentInfo->pixelShaderPath, &currentShader->pixel);
+  VkShaderModule vertexShader, pixelShader;
+  createShaderModule (device, createInfo->vertexShaderPath, &vertexShader);
+  createShaderModule (device, createInfo->pixelShaderPath, &pixelShader);
 
-    currentShader->stages[0].pName = "main";
-    currentShader->stages[0].pNext = nullptr;
-    currentShader->stages[0].flags = VULKAN_NO_FLAGS;
-    currentShader->stages[0].module = currentShader->vertex;
-    currentShader->stages[0].pSpecializationInfo = nullptr;
-    currentShader->stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    currentShader->stages[0].sType = PIPELINE_SHADER_STAGE_CREATE_INFO;
+  VkPipelineShaderStageCreateInfo shaderStages[2];
+  shaderStages[0].pName = "main";
+  shaderStages[0].pNext = nullptr;
+  shaderStages[0].module = vertexShader;
+  shaderStages[0].flags = VULKAN_NO_FLAGS;
+  shaderStages[0].pSpecializationInfo = nullptr;
+  shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+  shaderStages[0].sType = PIPELINE_SHADER_STAGE_CREATE_INFO;
 
-    currentShader->stages[1].pName = "main";
-    currentShader->stages[1].pNext = nullptr;
-    currentShader->stages[1].flags = VULKAN_NO_FLAGS;
-    currentShader->stages[1].module = currentShader->pixel;
-    currentShader->stages[1].pSpecializationInfo = nullptr;
-    currentShader->stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    currentShader->stages[1].sType = PIPELINE_SHADER_STAGE_CREATE_INFO;
+  shaderStages[1].pName = "main";
+  shaderStages[1].pNext = nullptr;
+  shaderStages[1].module = pixelShader;
+  shaderStages[1].flags = VULKAN_NO_FLAGS;
+  shaderStages[1].pSpecializationInfo = nullptr;
+  shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+  shaderStages[1].sType = PIPELINE_SHADER_STAGE_CREATE_INFO;
 
-    info->stageCount = 2;
-    info->pStages = currentShader->stages;
-    info->layout = currentInfo->layout;
-    info->renderPass = currentInfo->renderPass;
-    info->pVertexInputState = currentInfo->vertexInputInfo;
-    info->pInputAssemblyState = currentInfo->inputAssemblyInfo;
-    info->pDynamicState = currentInfo->dynamicInfo;
-    info->pViewportState = currentInfo->viewportInfo;
-    info->pRasterizationState = currentInfo->rasterizationInfo;
-    info->pDepthStencilState = currentInfo->depthStencilInfo;
-    info->pMultisampleState = currentInfo->multisampleInfo;
-    info->pColorBlendState = currentInfo->colorBlendInfo;
-    info->sType = GRAPHICS_PIPELINE_CREATE_INFO;
-  }
+  VkGraphicsPipelineCreateInfo info {GRAPHICS_PIPELINE_CREATE_INFO};
+  info.layout = createInfo->layout;
+  info.renderPass = createInfo->renderPass;
+  info.stageCount = ARRAY_SIZE (shaderStages);
 
-  VK_CHECK (vkCreateGraphicsPipelines (device, pipelineCache, count, infos, nullptr, outputs));
+  info.pStages = shaderStages;
+  info.pColorBlendState = &colorBlendState;
+  info.pMultisampleState = &multisampleState;
+  info.pInputAssemblyState = &inputAssemblyState;
+  info.pViewportState = createInfo->viewportState;
+  info.pDynamicState = createInfo->dynamicState;
+  info.pVertexInputState = createInfo->vertexInputState;
+  info.pDepthStencilState = createInfo->depthStencilState;
+  info.pRasterizationState = createInfo->rasterizationState;
 
-  for (Uint32 index = 0; index < count; ++index) {
-    vkDestroyShaderModule (device, shaders[index].pixel, nullptr);
-    vkDestroyShaderModule (device, shaders[index].vertex, nullptr);
-  }
+  VK_CHECK (vkCreateGraphicsPipelines (device, createInfo->cache, 1, &info, nullptr, output));
 
-  free (shaders);
-  free (infos);
+  vkDestroyShaderModule (device, pixelShader, nullptr);
+  vkDestroyShaderModule (device, vertexShader, nullptr);
 }
 
 VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool) {

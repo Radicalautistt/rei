@@ -193,6 +193,12 @@ enum class Result : Uint8 {
   FileDoesNotExist
 };
 
+struct Vertex {
+  Float32 x, y, z;
+  Float32 nx, ny, nz;
+  Float32 u, v;
+};
+
 void logger (LogLevel level, const char* format, ...);
 
 [[nodiscard]] const char* getError (Result result) noexcept;

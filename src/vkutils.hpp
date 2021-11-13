@@ -33,6 +33,7 @@ struct AttachmentCreateInfo {
   VkFormat format;
   Uint32 width, height;
   VkImageUsageFlags usage;
+  VkImageAspectFlags aspectMask;
 };
 
 struct SwapchainCreateInfo {
@@ -64,20 +65,19 @@ struct Shaders {
 };
 
 struct GraphicsPipelineCreateInfo {
+  VkPipelineCache cache;
   VkRenderPass renderPass;
   VkPipelineLayout layout;
 
-  const char* vertexShaderPath;
   const char* pixelShaderPath;
+  const char* vertexShaderPath;
 
-  VkPipelineDynamicStateCreateInfo* dynamicInfo;
-  VkPipelineViewportStateCreateInfo* viewportInfo;
-  VkPipelineColorBlendStateCreateInfo* colorBlendInfo;
-  VkPipelineMultisampleStateCreateInfo* multisampleInfo;
-  VkPipelineVertexInputStateCreateInfo* vertexInputInfo;
-  VkPipelineDepthStencilStateCreateInfo* depthStencilInfo;
-  VkPipelineInputAssemblyStateCreateInfo* inputAssemblyInfo;
-  VkPipelineRasterizationStateCreateInfo* rasterizationInfo;
+  VkPipelineDynamicStateCreateInfo* dynamicState;
+  VkPipelineViewportStateCreateInfo* viewportState;
+  VkPipelineVertexInputStateCreateInfo* vertexInputState;
+  VkPipelineDepthStencilStateCreateInfo* depthStencilState;
+  VkPipelineColorBlendAttachmentState* colorBlendAttachment;
+  VkPipelineRasterizationStateCreateInfo* rasterizationState;
 };
 
 struct BufferAllocationInfo {
@@ -140,14 +140,7 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output);
 void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain* swapchain);
 
 void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule* output);
-
-void createGraphicsPipelines (
-  VkDevice device,
-  VkPipelineCache pipelineCache,
-  Uint32 count,
-  const GraphicsPipelineCreateInfo* createInfos,
-  VkPipeline* outputs
-);
+void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* createInfo, VkPipeline* output);
 
 [[nodiscard]] VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool);
 void submitImmediateCommand (VkDevice device, const TransferContext* transferContext, VkCommandBuffer commandBuffer);

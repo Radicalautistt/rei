@@ -7,12 +7,6 @@
 
 namespace rei::gltf {
 
-struct Vertex {
-  Float32 x, y, z;
-  Float32 nx, ny, nz;
-  Float32 u, v;
-};
-
 struct Material {
   size_t albedoIndex;
   VkDescriptorSet descriptorSet;
