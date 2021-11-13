@@ -29,6 +29,12 @@ struct Image {
   VmaAllocation allocation;
 };
 
+struct AttachmentCreateInfo {
+  VkFormat format;
+  Uint32 width, height;
+  VkImageUsageFlags usage;
+};
+
 struct SwapchainCreateInfo {
   VkDevice device;
   VmaAllocator allocator;
@@ -121,6 +127,13 @@ void choosePhysicalDevice (
   VkSurfaceKHR targetSurface,
   QueueFamilyIndices* outputIndices,
   VkPhysicalDevice* output
+);
+
+void createAttachment (
+  VkDevice device,
+  VmaAllocator allocator,
+  const AttachmentCreateInfo* createInfo,
+  Image* output
 );
 
 void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output);

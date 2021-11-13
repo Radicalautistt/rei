@@ -6,12 +6,10 @@
 namespace rei {
 
 void logger (LogLevel level, const char* format, ...) {
-  {
-    static char colors[3][10] {ANSI_GREEN, ANSI_RED, ANSI_YELLOW};
-    static char names[3][11] {"[INFO]    ", "[ERROR]   ", "[WARNING] "};
+  static char colors[3][10] {ANSI_GREEN, ANSI_RED, ANSI_YELLOW};
+  static char names[3][11] {"[INFO]    ", "[ERROR]   ", "[WARNING] "};
 
-    printf ("%s%s", colors[level], names[level]);
-  }
+  printf ("%s%s", colors[level], names[level]);
 
   va_list arguments;
   va_start (arguments, format);

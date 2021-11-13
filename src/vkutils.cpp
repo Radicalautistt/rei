@@ -107,6 +107,63 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
   REI_ASSERT (*output);
 }
 
+void createAttachment (
+  VkDevice device,
+  VmaAllocator allocator,
+  const AttachmentCreateInfo* createInfo,
+  Image* output) {
+
+  {
+    output->format = createInfo->format;
+
+    VkImageCreateInfo info {IMAGE_CREATE_INFO};
+    info.mipLevels = 1;
+    info.arrayLayers = 1;
+    info.format = output->format;
+    info.imageType = VK_IMAGE_TYPE_2D;
+    info.samples = VK_SAMPLE_COUNT_1_BIT;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL;
+
+    info.usage = createInfo->usage;
+    //info.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    info.extent.depth = 1;
+    info.extent.width = createInfo->width;
+    info.extent.height = createInfo->height;
+
+    VmaAllocationCreateInfo allocationInfo {};
+    allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    VK_CHECK (vmaCreateImage (
+      allocator,
+      &info,
+      &allocationInfo,
+      &output->handle,
+      &output->allocation,
+      nullptr
+    ));
+  }
+
+  const VkImageAspectFlags aspectMasks[2] {
+    VK_IMAGE_ASPECT_COLOR_BIT,
+    VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+  };
+
+  VkImageViewCreateInfo info {IMAGE_VIEW_CREATE_INFO};
+  info.image = output->handle;
+  info.format = output->format;
+  info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+
+  info.subresourceRange.levelCount = 1;
+  info.subresourceRange.layerCount = 1;
+  info.subresourceRange.baseMipLevel = 0;
+  info.subresourceRange.baseArrayLayer = 0;
+  info.subresourceRange.aspectMask = aspectMasks[createInfo->usage == VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT];
+
+  VK_CHECK (vkCreateImageView (device, &info, nullptr, &output->view));
+}
+
 void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) {
   {
     // Choose swapchain extent
@@ -219,52 +276,14 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
     }
   }
 
-  { // Create depth image
-    output->depthImage.format = VK_FORMAT_D24_UNORM_S8_UINT;
+  // Create depth image
+  AttachmentCreateInfo info;
+  info.width = output->extent.width;
+  info.height = output->extent.height;
+  info.format = VK_FORMAT_D24_UNORM_S8_UINT;
+  info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-    VkImageCreateInfo info {IMAGE_CREATE_INFO};
-    info.mipLevels = 1;
-    info.arrayLayers = 1;
-    info.imageType = VK_IMAGE_TYPE_2D;
-    info.samples = VK_SAMPLE_COUNT_1_BIT;
-    info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    info.format = output->depthImage.format;
-
-    info.extent.depth = 1;
-    info.extent.width = output->extent.width;
-    info.extent.height = output->extent.height;
-
-    info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    VmaAllocationCreateInfo allocationInfo {};
-    allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-    VK_CHECK (vmaCreateImage (
-      createInfo->allocator,
-      &info,
-      &allocationInfo,
-      &output->depthImage.handle,
-      &output->depthImage.allocation,
-      nullptr
-    ));
-  }
-
-  VkImageSubresourceRange subresourceRange;
-  subresourceRange.levelCount = 1;
-  subresourceRange.layerCount = 1;
-  subresourceRange.baseMipLevel = 0;
-  subresourceRange.baseArrayLayer = 0;
-  subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-  // Create depth image view
-  VkImageViewCreateInfo info {IMAGE_VIEW_CREATE_INFO};
-  info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-  info.image = output->depthImage.handle;
-  info.format = output->depthImage.format;
-  info.subresourceRange = subresourceRange;
-
-  VK_CHECK (vkCreateImageView (createInfo->device, &info, nullptr, &output->depthImage.view));
+  createAttachment (createInfo->device, createInfo->allocator, &info, &output->depthImage);
 }
 
 void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain* swapchain) {
