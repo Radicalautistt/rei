@@ -4,7 +4,6 @@
 #include "imgui.hpp"
 #include "common.hpp"
 #include "camera.hpp"
-#include "vkinit.hpp"
 #include "window.hpp"
 #include "vkutils.hpp"
 #include "vkcommon.hpp"
@@ -79,19 +78,39 @@ int main () {
       #endif
     };
 
-    VkApplicationInfo applicationInfo {APPLICATION_INFO};
+    VkApplicationInfo applicationInfo;
+    applicationInfo.pNext = nullptr;
+    applicationInfo.engineVersion = 0;
     applicationInfo.pEngineName = "Rei";
+    applicationInfo.applicationVersion = 0;
+    applicationInfo.sType = APPLICATION_INFO;
     applicationInfo.apiVersion = VULKAN_VERSION;
     applicationInfo.pApplicationName = "Playground";
 
-    VkInstanceCreateInfo createInfo {INSTANCE_CREATE_INFO};
+    VkInstanceCreateInfo createInfo;
+    createInfo.pNext = nullptr;
+    createInfo.enabledLayerCount = 0;
+    createInfo.flags = VULKAN_NO_FLAGS;
+    createInfo.sType = INSTANCE_CREATE_INFO;
+    createInfo.ppEnabledLayerNames = nullptr;
     createInfo.pApplicationInfo = &applicationInfo;
     createInfo.ppEnabledExtensionNames = requiredExtensions;
     createInfo.enabledExtensionCount = ARRAY_SIZE (requiredExtensions);
 
     #ifndef NDEBUG
-    auto debugMessengerInfo = rei::vki::debugMessengerInfo ();
     const char* validationLayers[] {"VK_LAYER_KHRONOS_validation"};
+
+    VkDebugUtilsMessengerCreateInfoEXT debugMessengerInfo;
+    debugMessengerInfo.pNext = nullptr;
+    debugMessengerInfo.pUserData = nullptr;
+    debugMessengerInfo.flags = VULKAN_NO_FLAGS;
+    debugMessengerInfo.pfnUserCallback = rei::vkc::debugCallback;
+    debugMessengerInfo.sType = DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    debugMessengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    debugMessengerInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    debugMessengerInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    debugMessengerInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+    debugMessengerInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
 
     createInfo.enabledLayerCount = 1;
     createInfo.pNext = &debugMessengerInfo;
@@ -104,15 +123,29 @@ int main () {
 
   #ifndef NDEBUG
   { // Create debug messenger if debug mode is enabled
-    auto createInfo = rei::vki::debugMessengerInfo ();
+    VkDebugUtilsMessengerCreateInfoEXT createInfo;
+    createInfo.pNext = nullptr;
+    createInfo.pUserData = nullptr;
+    createInfo.flags = VULKAN_NO_FLAGS;
+    createInfo.pfnUserCallback = rei::vkc::debugCallback;
+    createInfo.sType = DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+    createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+
     VK_CHECK (vkCreateDebugUtilsMessengerEXT (instance, &createInfo, nullptr, &debugMessenger));
   }
   #endif
 
   { // Create window surface
-    VkXcbSurfaceCreateInfoKHR createInfo {XCB_SURFACE_CREATE_INFO_KHR};
+    VkXcbSurfaceCreateInfoKHR createInfo;
+    createInfo.pNext = nullptr;
+    createInfo.flags = VULKAN_NO_FLAGS;
     createInfo.window = window.handle;
     createInfo.connection = window.connection;
+    createInfo.sType = XCB_SURFACE_CREATE_INFO_KHR;
 
     VK_CHECK (vkCreateXcbSurfaceKHR (instance, &createInfo, nullptr, &windowSurface));
   }
@@ -360,130 +393,136 @@ int main () {
   sponza.initDescriptors (device);
   sponza.initPipelines (device, renderPass, pipelineCache, &swapchain);
 
-  { // Render loop
-    Bool32 running = True;
-    Float32 lastTime = 0.f;
-    Float32 deltaTime = 0.f;
+  Bool32 running = True;
+  Float32 lastTime = 0.f;
+  Float32 deltaTime = 0.f;
 
-    xcb_generic_event_t* event = nullptr;
+  xcb_generic_event_t* event = nullptr;
 
-    while (running) {
-      camera.firstMouse = True;
-      Float32 currentTime = rei::utils::Timer::getCurrentTime ();
-      deltaTime = currentTime - lastTime;
-      lastTime = currentTime;
+  VkCommandBufferBeginInfo cmdBeginInfo;
+  cmdBeginInfo.pNext = nullptr;
+  cmdBeginInfo.pInheritanceInfo = nullptr;
+  cmdBeginInfo.sType = COMMAND_BUFFER_BEGIN_INFO;
+  cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-      // NOTE IMGUI asserts that deltaTime > 0.f, hence this check.
-      Float32 imguiDeltaTime[2] {1.f / 60.f, deltaTime};
-      ImGui::GetIO().DeltaTime = imguiDeltaTime[deltaTime > 0.f];
+  VkPipelineStageFlags pipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-      while ((event = xcb_poll_for_event (window.connection))) {
-	switch (event->response_type & ~0x80) {
-	  case XCB_KEY_PRESS: {
-	    const auto key = (const xcb_key_press_event_t*) event;
-	    switch (key->detail) {
-	      case KEY_ESCAPE: running = False; break;
-	      case KEY_A: camera.move (rei::Camera::Direction::Left, deltaTime); break;
-	      case KEY_D: camera.move (rei::Camera::Direction::Right, deltaTime); break;
-	      case KEY_W: camera.move (rei::Camera::Direction::Forward, deltaTime); break;
-	      case KEY_S: camera.move (rei::Camera::Direction::Backward, deltaTime); break;
-	      default: break;
-	    }
-          } break;
+  while (running) {
+    camera.firstMouse = True;
+    Float32 currentTime = rei::utils::Timer::getCurrentTime ();
+    deltaTime = currentTime - lastTime;
+    lastTime = currentTime;
 
-	  case XCB_MOTION_NOTIFY: {
-	    const auto data = (const xcb_motion_notify_event_t*) event;
-	    camera.handleMouseMovement ((Float32) data->event_x, (Float32) data->event_y);
-	  } break;
+    // NOTE IMGUI asserts that deltaTime > 0.f, hence this check.
+    Float32 imguiDeltaTime[2] {1.f / 60.f, deltaTime};
+    ImGui::GetIO().DeltaTime = imguiDeltaTime[deltaTime > 0.f];
 
-	  default: break;
-	}
+    while ((event = xcb_poll_for_event (window.connection))) {
+      switch (event->response_type & ~0x80) {
+        case XCB_KEY_PRESS: {
+          const auto key = (const xcb_key_press_event_t*) event;
+          switch (key->detail) {
+            case KEY_ESCAPE: running = False; break;
+            case KEY_A: camera.move (rei::Camera::Direction::Left, deltaTime); break;
+            case KEY_D: camera.move (rei::Camera::Direction::Right, deltaTime); break;
+            case KEY_W: camera.move (rei::Camera::Direction::Forward, deltaTime); break;
+            case KEY_S: camera.move (rei::Camera::Direction::Backward, deltaTime); break;
+            default: break;
+          }
+        } break;
 
-	imguiContext.handleEvents (event);
+        case XCB_MOTION_NOTIFY: {
+          const auto data = (const xcb_motion_notify_event_t*) event;
+          camera.handleMouseMovement ((Float32) data->event_x, (Float32) data->event_y);
+        } break;
 
-	free (event);
+        default: break;
       }
 
-      frameIndex %= FRAMES_COUNT;
-      const auto currentFrame = &frames[frameIndex];
+      imguiContext.handleEvents (event);
 
-      VK_CHECK (vkWaitForFences (device, 1, &currentFrame->renderFence, VK_TRUE, ~0ull));
-      VK_CHECK (vkResetFences (device, 1, &currentFrame->renderFence));
-
-      Uint32 imageIndex = 0;
-      VK_CHECK (vkAcquireNextImageKHR (
-        device,
-	swapchain.handle,
-	~0ull,
-	currentFrame->presentSemaphore,
-	VK_NULL_HANDLE,
-	&imageIndex
-      ));
-
-      { // Begin writing to command buffer
-        VkCommandBufferBeginInfo beginInfo {COMMAND_BUFFER_BEGIN_INFO};
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	VK_CHECK (vkBeginCommandBuffer (currentFrame->commandBuffer, &beginInfo));
-      }
-
-      { // Begin render pass
-        VkRenderPassBeginInfo beginInfo {RENDER_PASS_BEGIN_INFO};
-	beginInfo.renderPass = renderPass;
-	beginInfo.renderArea.offset = {0, 0};
-	beginInfo.pClearValues = clearValues;
-	beginInfo.renderArea.extent = swapchain.extent;
-	beginInfo.framebuffer = framebuffers[imageIndex];
-	beginInfo.clearValueCount = ARRAY_SIZE (clearValues);
-
-	vkCmdBeginRenderPass (currentFrame->commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-      }
-
-      {
-        rei::math::Matrix4 viewMatrix;
-	auto center = camera.position + camera.front;
-        rei::math::lookAt (&camera.position, &center, &camera.up, &viewMatrix);
-
-        rei::math::Matrix4 viewProjection = camera.projection * viewMatrix;
-        sponza.draw (currentFrame->commandBuffer, &viewProjection);
-
-        imguiContext.newFrame ();
-	rei::imgui::showDebugWindow (&camera.speed, allocator);
-        ImGui::Render ();
-        const ImDrawData* drawData = ImGui::GetDrawData ();
-        imguiContext.updateBuffers (frameIndex, drawData);
-        imguiContext.renderDrawData (currentFrame->commandBuffer, frameIndex, drawData);
-      }
-
-      vkCmdEndRenderPass (currentFrame->commandBuffer);
-      VK_CHECK (vkEndCommandBuffer (currentFrame->commandBuffer));
-
-      { // Submit written commands to a queue
-        VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-        VkSubmitInfo submitInfo {SUBMIT_INFO};
-	submitInfo.commandBufferCount = 1;
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pWaitDstStageMask = &waitStage;
-	submitInfo.pCommandBuffers = &currentFrame->commandBuffer;
-	submitInfo.pWaitSemaphores = &currentFrame->presentSemaphore;
-	submitInfo.pSignalSemaphores = &currentFrame->renderSemaphore;
-
-	VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->renderFence));
-      }
-
-      // Present resulting image
-      VkPresentInfoKHR presentInfo {PRESENT_INFO_KHR};
-      presentInfo.swapchainCount = 1;
-      presentInfo.waitSemaphoreCount = 1;
-      presentInfo.pImageIndices = &imageIndex;
-      presentInfo.pSwapchains = &swapchain.handle;
-      presentInfo.pWaitSemaphores = &currentFrame->renderSemaphore;
-
-      VK_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
-      ++frameIndex;
+      free (event);
     }
+
+    frameIndex %= FRAMES_COUNT;
+    const auto currentFrame = &frames[frameIndex];
+
+    VK_CHECK (vkWaitForFences (device, 1, &currentFrame->renderFence, VK_TRUE, ~0ull));
+    VK_CHECK (vkResetFences (device, 1, &currentFrame->renderFence));
+
+    Uint32 imageIndex = 0;
+    VK_CHECK (vkAcquireNextImageKHR (
+      device,
+      swapchain.handle,
+      ~0ull,
+      currentFrame->presentSemaphore,
+      VK_NULL_HANDLE,
+      &imageIndex
+    ));
+
+    VK_CHECK (vkBeginCommandBuffer (currentFrame->commandBuffer, &cmdBeginInfo));
+
+    { // Begin render pass
+      VkRenderPassBeginInfo beginInfo;
+      beginInfo.pNext = nullptr;
+      beginInfo.renderPass = renderPass;
+      beginInfo.renderArea.offset = {0, 0};
+      beginInfo.pClearValues = clearValues;
+      beginInfo.sType = RENDER_PASS_BEGIN_INFO;
+      beginInfo.renderArea.extent = swapchain.extent;
+      beginInfo.framebuffer = framebuffers[imageIndex];
+      beginInfo.clearValueCount = ARRAY_SIZE (clearValues);
+
+      vkCmdBeginRenderPass (currentFrame->commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    }
+
+    {
+      rei::math::Matrix4 viewMatrix;
+      auto center = camera.position + camera.front;
+      rei::math::lookAt (&camera.position, &center, &camera.up, &viewMatrix);
+
+      rei::math::Matrix4 viewProjection = camera.projection * viewMatrix;
+      sponza.draw (currentFrame->commandBuffer, &viewProjection);
+
+      imguiContext.newFrame ();
+      rei::imgui::showDebugWindow (&camera.speed, allocator);
+      ImGui::Render ();
+      const ImDrawData* drawData = ImGui::GetDrawData ();
+      imguiContext.updateBuffers (frameIndex, drawData);
+      imguiContext.renderDrawData (currentFrame->commandBuffer, frameIndex, drawData);
+    }
+
+    vkCmdEndRenderPass (currentFrame->commandBuffer);
+    VK_CHECK (vkEndCommandBuffer (currentFrame->commandBuffer));
+
+    { // Submit written commands to a queue
+      VkSubmitInfo submitInfo;
+      submitInfo.pNext = nullptr;
+      submitInfo.sType = SUBMIT_INFO;
+      submitInfo.commandBufferCount = 1;
+      submitInfo.waitSemaphoreCount = 1;
+      submitInfo.signalSemaphoreCount = 1;
+      submitInfo.pWaitDstStageMask = &pipelineWaitStage;
+      submitInfo.pCommandBuffers = &currentFrame->commandBuffer;
+      submitInfo.pWaitSemaphores = &currentFrame->presentSemaphore;
+      submitInfo.pSignalSemaphores = &currentFrame->renderSemaphore;
+
+      VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->renderFence));
+    }
+
+    // Present resulting image
+    VkPresentInfoKHR presentInfo;
+    presentInfo.pNext = nullptr;
+    presentInfo.pResults = nullptr;
+    presentInfo.swapchainCount = 1;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.sType = PRESENT_INFO_KHR;
+    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pSwapchains = &swapchain.handle;
+    presentInfo.pWaitSemaphores = &currentFrame->renderSemaphore;
+
+    VK_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
+    ++frameIndex;
   }
 
   // Wait for gpu to finish rendering of the last frame
