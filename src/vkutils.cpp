@@ -114,12 +114,10 @@ void createAttachment (
   Image* output) {
 
   {
-    output->format = createInfo->format;
-
     VkImageCreateInfo info {IMAGE_CREATE_INFO};
     info.mipLevels = 1;
     info.arrayLayers = 1;
-    info.format = output->format;
+    info.format = createInfo->format;
     info.imageType = VK_IMAGE_TYPE_2D;
     info.samples = VK_SAMPLE_COUNT_1_BIT;
     info.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -147,7 +145,7 @@ void createAttachment (
 
   VkImageViewCreateInfo info {IMAGE_VIEW_CREATE_INFO};
   info.image = output->handle;
-  info.format = output->format;
+  info.format = createInfo->format;
   info.viewType = VK_IMAGE_VIEW_TYPE_2D;
 
   info.subresourceRange.levelCount = 1;
@@ -196,7 +194,7 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
 
       surfaceFormat = available[0];
       for (Uint32 index = 0; index < count; ++index) {
-        Bool rgba8 = available[index].format == VK_FORMAT_R8G8B8A8_SRGB;
+        Bool rgba8 = available[index].format == VULKAN_TEXTURE_FORMAT;
         Bool nonLinear = available[index].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
         if (rgba8 && nonLinear) {
@@ -273,9 +271,9 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
 
   // Create depth image
   AttachmentCreateInfo info;
+  info.format = VULKAN_DEPTH_FORMAT;
   info.width = output->extent.width;
   info.height = output->extent.height;
-  info.format = VK_FORMAT_X8_D24_UNORM_PACK32;
   info.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
   info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
@@ -501,38 +499,39 @@ void allocateTexture (
   const TransferContext* transferContext,
   Image* output) {
 
-  output->format = VK_FORMAT_R8G8B8A8_SRGB;
-
   VkExtent3D extent {allocationInfo->width, allocationInfo->height, 1};
   VkDeviceSize size = (VkDeviceSize) (extent.width * extent.height * 4);
+  Uint32 mipLevels = (Uint32) floorf (log2f ((float) MAX (extent.width, extent.height))) + 1;
 
   Buffer stagingBuffer;
   allocateStagingBuffer (allocator, size, &stagingBuffer);
   VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
 
-  if (allocationInfo->compressed) {
-    LZ4_decompress_safe (
-      allocationInfo->pixels,
-      (char*) (stagingBuffer.mapped),
-      (int) (allocationInfo->compressedSize),
-      (int) (size)
-    );
-  } else {
-    memcpy (stagingBuffer.mapped, allocationInfo->pixels, size);
-  }
+  LZ4_decompress_safe (
+    allocationInfo->pixels,
+    (char*) (stagingBuffer.mapped),
+    (int) (allocationInfo->compressedSize),
+    (int) (size)
+  );
 
   vmaUnmapMemory (allocator, stagingBuffer.allocation);
 
   {
-    VkImageCreateInfo createInfo {IMAGE_CREATE_INFO};
+    VkImageCreateInfo createInfo;
+    createInfo.pNext = nullptr;
+    createInfo.flags = VULKAN_NO_FLAGS;
+    createInfo.sType = IMAGE_CREATE_INFO;
+    createInfo.queueFamilyIndexCount = 0;
+    createInfo.pQueueFamilyIndices = nullptr;
+
     createInfo.extent = extent;
     createInfo.arrayLayers = 1;
-    createInfo.format = output->format;
+    createInfo.mipLevels = mipLevels;
     createInfo.imageType = VK_IMAGE_TYPE_2D;
+    createInfo.format = VULKAN_TEXTURE_FORMAT;
     createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
-    createInfo.mipLevels = allocationInfo->mipLevels;
     createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     createInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     createInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -555,24 +554,28 @@ void allocateTexture (
   subresourceRange.layerCount = 1;
   subresourceRange.baseMipLevel = 0;
   subresourceRange.baseArrayLayer = 0;
-  subresourceRange.levelCount = allocationInfo->mipLevels;
+  subresourceRange.levelCount = mipLevels;
   subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
+  auto commandBuffer = startImmediateCommand (device, transferContext->commandPool);
+
   {
-    auto commandBuffer = startImmediateCommand (device, transferContext->commandPool);
+    ImageLayoutTransitionInfo transitionInfo;
+    transitionInfo.subresourceRange = &subresourceRange;
+    transitionInfo.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    transitionInfo.source = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-    {
-      ImageLayoutTransitionInfo transitionInfo;
-      transitionInfo.subresourceRange = &subresourceRange;
-      transitionInfo.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-      transitionInfo.source = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
+  }
 
-      transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
-    }
+  {
+    VkBufferImageCopy copyRegion;
+    copyRegion.imageOffset.x = 0;
+    copyRegion.imageOffset.y = 0;
+    copyRegion.imageOffset.z = 0;
 
-    VkBufferImageCopy copyRegion {};
     copyRegion.bufferOffset = 0;
     copyRegion.bufferRowLength = 0;
     copyRegion.imageExtent = extent;
@@ -594,21 +597,102 @@ void allocateTexture (
     ImageLayoutTransitionInfo transitionInfo;
     transitionInfo.subresourceRange = &subresourceRange;
     transitionInfo.source = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
     transitionInfo.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+    transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
+  }
+
+  subresourceRange.levelCount = 1;
+
+  for (Uint32 mipLevel = 1; mipLevel < mipLevels; ++mipLevel) {
+    subresourceRange.baseMipLevel = mipLevel;
+
+    {
+      ImageLayoutTransitionInfo transitionInfo;
+      transitionInfo.subresourceRange = &subresourceRange;
+      transitionInfo.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      transitionInfo.source = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+      transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
+    }
+
+    VkImageBlit imageBlit;
+    imageBlit.srcSubresource.layerCount = 1;
+    imageBlit.srcSubresource.baseArrayLayer = 0;
+    imageBlit.srcSubresource.mipLevel = mipLevel - 1;
+    imageBlit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    imageBlit.srcOffsets[0].x = 0;
+    imageBlit.srcOffsets[0].y = 0;
+    imageBlit.srcOffsets[0].z = 0;
+    imageBlit.srcOffsets[1].z = 1;
+    imageBlit.srcOffsets[1].x = (int32_t) (extent.width >> (mipLevel - 1));
+    imageBlit.srcOffsets[1].y = (int32_t) (extent.height >> (mipLevel - 1));
+
+    imageBlit.dstSubresource.layerCount = 1;
+    imageBlit.dstSubresource.baseArrayLayer = 0;
+    imageBlit.dstSubresource.mipLevel = mipLevel;
+    imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    imageBlit.dstOffsets[0].x = 0;
+    imageBlit.dstOffsets[0].y = 0;
+    imageBlit.dstOffsets[0].z = 0;
+    imageBlit.dstOffsets[1].z = 1;
+    imageBlit.dstOffsets[1].x = (int32_t) (extent.width >> mipLevel);
+    imageBlit.dstOffsets[1].y = (int32_t) (extent.height >> mipLevel);
+
+    vkCmdBlitImage (
+      commandBuffer,
+      output->handle,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      output->handle,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      1, &imageBlit,
+      VK_FILTER_LINEAR
+    );
+
+   ImageLayoutTransitionInfo transitionInfo;
+   transitionInfo.subresourceRange = &subresourceRange;
+   transitionInfo.source = VK_PIPELINE_STAGE_TRANSFER_BIT;
+   transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
+   transitionInfo.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+   transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+   transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
+  }
+
+  subresourceRange.baseMipLevel = 0;
+  subresourceRange.levelCount = mipLevels;
+
+  {
+    ImageLayoutTransitionInfo transitionInfo;
+    transitionInfo.source = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transitionInfo.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     transitionInfo.destination = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     transitionInfo.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
-    submitImmediateCommand (device, transferContext, commandBuffer);
   }
 
+  submitImmediateCommand (device, transferContext, commandBuffer);
   vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
 
-  VkImageViewCreateInfo createInfo {IMAGE_VIEW_CREATE_INFO};
+  VkImageViewCreateInfo createInfo;
+  createInfo.pNext = nullptr;
   createInfo.image = output->handle;
-  createInfo.format = output->format;
+  createInfo.flags = VULKAN_NO_FLAGS;
+  createInfo.format = VULKAN_TEXTURE_FORMAT;
+  createInfo.sType = IMAGE_VIEW_CREATE_INFO;
   createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
   createInfo.subresourceRange = subresourceRange;
+  createInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+  createInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+  createInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+  createInfo.components.a = VK_COMPONENT_SWIZZLE_A;
 
   VK_CHECK (vkCreateImageView (device, &createInfo, nullptr, &output->view));
 }

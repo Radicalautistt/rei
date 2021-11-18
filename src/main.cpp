@@ -122,8 +122,9 @@ int main () {
     rei::vku::choosePhysicalDevice (instance, windowSurface, &indices, &physicalDevice);
 
     {
+      // Make sure that VULKAN_TEXTURE_FORMAT supports image blitting (which is needed for mipmap generation) on the chosen device
       VkFormatProperties formatProperties;
-      vkGetPhysicalDeviceFormatProperties (physicalDevice, VK_FORMAT_R8G8B8A8_SRGB, &formatProperties);
+      vkGetPhysicalDeviceFormatProperties (physicalDevice, VULKAN_TEXTURE_FORMAT, &formatProperties);
 
       VkFormatFeatureFlags requiredFlags = VK_FORMAT_FEATURE_BLIT_SRC_BIT;
       requiredFlags |= VK_FORMAT_FEATURE_BLIT_DST_BIT;
@@ -228,8 +229,8 @@ int main () {
 
     // Depth attachment
     attachments[1].flags = VULKAN_NO_FLAGS;
+    attachments[1].format = VULKAN_DEPTH_FORMAT;
     attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-    attachments[1].format = swapchain.depthImage.format;
     attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -346,15 +347,13 @@ int main () {
 
   { // Create imgui context
     rei::imgui::ContextCreateInfo createInfo;
-    createInfo.device = device;
     createInfo.window = &window;
-    createInfo.allocator = allocator;
     createInfo.renderPass = renderPass;
     createInfo.pipelineCache = pipelineCache;
     createInfo.transferContext = &transferContext;
     createInfo.descriptorPool = mainDescriptorPool;
 
-    rei::imgui::create (&createInfo, &imguiContext);
+    rei::imgui::create (device, allocator, &createInfo, &imguiContext);
   }
 
   rei::gltf::load (device, allocator, &transferContext, "assets/models/sponza-scene/Sponza.gltf", &sponza);
@@ -491,7 +490,7 @@ int main () {
   vkDeviceWaitIdle (device);
 
   rei::gltf::destroy (device, allocator, &sponza);
-  rei::imgui::destroy (&imguiContext);
+  rei::imgui::destroy (device, &imguiContext);
 
   { // Save pipeline cache for future reuse
     size_t size = 0;

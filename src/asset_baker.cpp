@@ -10,14 +10,12 @@
 #include <stb/stb_image.h>
 #include <stb/stb_sprintf.h>
 #include <rapidjson/document.h>
-#include <stb/stb_image_resize.h>
 
 namespace rei::assets {
 
 void bakeImage (const char* relativePath) {
   Int32 width, height, channels;
   auto pixels = stbi_load (relativePath, &width, &height, &channels, STBI_rgb_alpha);
-  LOGS_WARNING (relativePath);
   REI_ASSERT (pixels);
 
   char outputPath[256] {};
@@ -27,52 +25,18 @@ void bakeImage (const char* relativePath) {
 
   FILE* outputFile = fopen (outputPath, "wb");
 
-  Int32 resultSize = 0;
-  Int32 originalSize = width * height * 4;
-  Uint32 mipLevels = (Uint32) floorf (log2f ((Float32) MAX (width, height))) + 1;
-
-  auto mipSizes = ALLOCA (size_t, mipLevels);
-
-  // Calculate resulting image size, which contains all mip levels
-  for (Uint32 mipLevel = 0; mipLevel < mipLevels; ++mipLevel) {
-    // Cache sizes
-    mipSizes[mipLevel] = (width >> mipLevel) * (height >> mipLevel) * 4;
-    resultSize += (Int32) mipSizes[mipLevel];
-  }
-
-  Uint8* resultImage = MALLOC (Uint8, (size_t) resultSize);
-
-  size_t mipOffset = 0;
-  memcpy (resultImage, pixels, originalSize);
-  mipOffset += (size_t) originalSize;
-
-  for (Uint32 mipLevel = 1; mipLevel < mipLevels; ++mipLevel) {
-    stbir_resize_uint8 (
-      pixels,
-      width,
-      height,
-      1,
-      resultImage + mipOffset,
-      width >> mipLevel,
-      height >> mipLevel,
-      1,
-      4
-    );
-
-    mipOffset += mipSizes[mipLevel];
-  }
-
-  stbi_image_free (pixels);
-
-  char* compressed = MALLOC (char, originalSize);
-  Int32 compressedBound = LZ4_compressBound (resultSize);
+  Int32 imageSize = width * height * 4;
+  Int32 compressedBound = LZ4_compressBound (imageSize);
+  char* compressed = MALLOC (char, compressedBound);
 
   Int32 compressedActual = LZ4_compress_default (
-    (const char*) resultImage,
+    (const char*) pixels,
     compressed,
-    resultSize,
+    imageSize,
     compressedBound
   );
+
+  stbi_image_free (pixels);
 
   if (compressedActual < compressedBound) {
     char* temp = compressed;
@@ -85,8 +49,7 @@ void bakeImage (const char* relativePath) {
 R"({
   "width":%d,
   "height":%d,
-  "mipLevels":%u,
-  "binarySize":%d
+  "compressedSize":%d
 })";
 
   char metadata[128] {};
@@ -95,7 +58,6 @@ R"({
     metadataFormat,
     width,
     height,
-    mipLevels,
     compressedActual
   );
 
@@ -143,11 +105,9 @@ Result readImage (const char* relativePath, vku::TextureAllocationInfo* output) 
   rapidjson::Document parsedMetadata;
   parsedMetadata.Parse (metadata);
 
-  output->compressed = True;
   output->width = parsedMetadata["width"].GetUint ();
   output->height = parsedMetadata["height"].GetUint ();
-  output->mipLevels = parsedMetadata["mipLevels"].GetUint ();
-  output->compressedSize = (size_t) parsedMetadata["binarySize"].GetUint64 ();
+  output->compressedSize = (size_t) parsedMetadata["compressedSize"].GetUint64 ();
 
   output->pixels = MALLOC (char, output->compressedSize);
   fread (output->pixels, 1, output->compressedSize, assetFile);

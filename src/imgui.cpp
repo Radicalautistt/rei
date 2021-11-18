@@ -162,11 +162,10 @@ void Context::renderDrawData (VkCommandBuffer commandBuffer, Uint32 frameIndex, 
   }
 }
 
-void create (const ContextCreateInfo* createInfo, Context* output) {
+void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* createInfo, Context* output) {
+  output->allocator = allocator;
   output->handle = ImGui::CreateContext ();
   output->window = createInfo->window;
-  output->device = createInfo->device;
-  output->allocator = createInfo->allocator;
   output->transferContext = createInfo->transferContext;
 
   // Create dummy vertex and index buffers for each frame.
@@ -198,21 +197,124 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     ImGuiIO& io = ImGui::GetIO ();
     io.Fonts->GetTexDataAsRGBA32 (&pixels, &width, &height);
 
-    vku::TextureAllocationInfo allocationInfo;
-    allocationInfo.mipLevels = 1;
-    allocationInfo.compressed = False;
-    allocationInfo.compressedSize = 0;
-    allocationInfo.width = (Uint32) width;
-    allocationInfo.pixels = (char*) pixels;
-    allocationInfo.height = (Uint32) height;
+    VkExtent3D extent {(Uint32) width, (Uint32) height, 1};
+    VkDeviceSize size = (VkDeviceSize) (extent.width * extent.height * 4);
 
-    vku::allocateTexture (
-      output->device,
-      output->allocator,
-      &allocationInfo,
-      output->transferContext,
-      &output->fontTexture
-    );
+    vku::Buffer stagingBuffer;
+    vku::allocateStagingBuffer (allocator, size, &stagingBuffer);
+
+    VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
+    memcpy (stagingBuffer.mapped, pixels, size);
+    vmaUnmapMemory (allocator, stagingBuffer.allocation);
+
+    {
+      VkImageCreateInfo info;
+      info.pNext = nullptr;
+      info.flags = VULKAN_NO_FLAGS;
+      info.sType = IMAGE_CREATE_INFO;
+      info.queueFamilyIndexCount = 0;
+      info.pQueueFamilyIndices = nullptr;
+
+      info.extent = extent;
+      info.mipLevels = 1;
+      info.arrayLayers = 1;
+      info.imageType = VK_IMAGE_TYPE_2D;
+      info.format = VULKAN_TEXTURE_FORMAT;
+      info.samples = VK_SAMPLE_COUNT_1_BIT;
+      info.tiling = VK_IMAGE_TILING_OPTIMAL;
+      info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+      info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+      info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+      info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+      info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+      VmaAllocationCreateInfo vmaAllocationInfo {};
+      vmaAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+      vmaAllocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+      VK_CHECK (vmaCreateImage (
+        allocator,
+        &info,
+        &vmaAllocationInfo,
+        &output->fontTexture.handle,
+        &output->fontTexture.allocation,
+        nullptr
+      ));
+    }
+
+    VkImageSubresourceRange subresourceRange;
+    subresourceRange.layerCount = 1;
+    subresourceRange.levelCount = 1;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    auto commandBuffer = vku::startImmediateCommand (device, createInfo->transferContext->commandPool);
+
+    {
+      vku::ImageLayoutTransitionInfo transitionInfo;
+      transitionInfo.subresourceRange = &subresourceRange;
+      transitionInfo.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      transitionInfo.source = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+      vku::transitionImageLayout (commandBuffer, &transitionInfo, output->fontTexture.handle);
+    }
+
+    {
+      VkBufferImageCopy copyRegion;
+      copyRegion.imageOffset.x = 0;
+      copyRegion.imageOffset.y = 0;
+      copyRegion.imageOffset.z = 0;
+
+      copyRegion.bufferOffset = 0;
+      copyRegion.bufferRowLength = 0;
+      copyRegion.imageExtent = extent;
+      copyRegion.bufferImageHeight = 0;
+
+      copyRegion.imageSubresource.mipLevel = 0;
+      copyRegion.imageSubresource.layerCount = 1;
+      copyRegion.imageSubresource.baseArrayLayer = 0;
+      copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+      vkCmdCopyBufferToImage (
+        commandBuffer,
+        stagingBuffer.handle,
+        output->fontTexture.handle,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &copyRegion
+      );
+    }
+
+    {
+      vku::ImageLayoutTransitionInfo transitionInfo;
+      transitionInfo.subresourceRange = &subresourceRange;
+      transitionInfo.source = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      transitionInfo.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+      transitionInfo.destination = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+      transitionInfo.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+      vku::transitionImageLayout (commandBuffer, &transitionInfo, output->fontTexture.handle);
+    }
+
+    vku::submitImmediateCommand (device, createInfo->transferContext, commandBuffer);
+    vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
+
+    VkImageViewCreateInfo info;
+    info.pNext = nullptr;
+    info.flags = VULKAN_NO_FLAGS;
+    info.sType = IMAGE_VIEW_CREATE_INFO;
+    info.format = VULKAN_TEXTURE_FORMAT;
+    info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    info.image = output->fontTexture.handle;
+    info.subresourceRange = subresourceRange;
+    info.components.r = VK_COMPONENT_SWIZZLE_R;
+    info.components.g = VK_COMPONENT_SWIZZLE_G;
+    info.components.b = VK_COMPONENT_SWIZZLE_B;
+    info.components.a = VK_COMPONENT_SWIZZLE_A;
+
+    VK_CHECK (vkCreateImageView (device, &info, nullptr, &output->fontTexture.view));
 
     io.Fonts->ClearTexData ();
     io.Fonts->SetTexID ((ImTextureID) ((intptr_t) output->fontTexture.handle));
@@ -227,7 +329,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
 
-    VK_CHECK (vkCreateSampler (output->device, &samplerInfo, nullptr, &output->fontSampler));
+    VK_CHECK (vkCreateSampler (device, &samplerInfo, nullptr, &output->fontSampler));
   }
 
   { // Create descriptor set layout for font sampler
@@ -242,7 +344,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     layoutInfo.bindingCount = 1;
     layoutInfo.pBindings = &binding;
 
-    VK_CHECK (vkCreateDescriptorSetLayout (output->device, &layoutInfo, nullptr, &output->descriptorSetLayout));
+    VK_CHECK (vkCreateDescriptorSetLayout (device, &layoutInfo, nullptr, &output->descriptorSetLayout));
   }
 
   { // Allocate descriptor set for font sampler
@@ -251,7 +353,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     allocationInfo.pSetLayouts = &output->descriptorSetLayout;
     allocationInfo.descriptorPool = createInfo->descriptorPool;
 
-    VK_CHECK (vkAllocateDescriptorSets (output->device, &allocationInfo, &output->descriptorSet));
+    VK_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &output->descriptorSet));
   }
 
   {
@@ -267,7 +369,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     write.dstSet = output->descriptorSet;
     write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
-    vkUpdateDescriptorSets (output->device, 1, &write, 0, nullptr);
+    vkUpdateDescriptorSets (device, 1, &write, 0, nullptr);
   }
 
   {
@@ -282,7 +384,7 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     createInfo.pPushConstantRanges = &pushConstantRange;
     createInfo.pSetLayouts = &output->descriptorSetLayout;
 
-    VK_CHECK (vkCreatePipelineLayout (output->device, &createInfo, nullptr, &output->pipelineLayout));
+    VK_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &output->pipelineLayout));
   }
 
   {
@@ -371,14 +473,14 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
     info.rasterizationState = &rasterizationState;
     info.colorBlendAttachment = &colorBlendAttachment;
 
-    vku::createGraphicsPipeline (output->device, &info, &output->pipeline);
+    vku::createGraphicsPipeline (device, &info, &output->pipeline);
   }
 
   {
     VkFenceCreateInfo createInfo {FENCE_CREATE_INFO};
     createInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VK_CHECK (vkCreateFence (output->device, &createInfo, nullptr, &output->bufferUpdateFence));
+    VK_CHECK (vkCreateFence (device, &createInfo, nullptr, &output->bufferUpdateFence));
   }
 
   ImGuiIO& io = ImGui::GetIO ();
@@ -398,8 +500,8 @@ void create (const ContextCreateInfo* createInfo, Context* output) {
   style.Colors[ImGuiCol_TitleBgActive] = {0.f, 0.f, 0.f, 1.f};
 }
 
-void destroy (Context* context) {
-  vkDestroyFence (context->device, context->bufferUpdateFence, nullptr);
+void destroy (VkDevice device, Context* context) {
+  vkDestroyFence (device, context->bufferUpdateFence, nullptr);
 
   for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
     vmaUnmapMemory (context->allocator, context->indexBuffers[index].allocation);
@@ -409,11 +511,11 @@ void destroy (Context* context) {
     vmaDestroyBuffer (context->allocator, context->vertexBuffers[index].handle, context->vertexBuffers[index].allocation);
   }
 
-  vkDestroyPipelineLayout (context->device, context->pipelineLayout, nullptr);
-  vkDestroyPipeline (context->device, context->pipeline, nullptr);
-  vkDestroyDescriptorSetLayout (context->device, context->descriptorSetLayout, nullptr);
-  vkDestroySampler (context->device, context->fontSampler, nullptr);
-  vkDestroyImageView (context->device, context->fontTexture.view, nullptr);
+  vkDestroyPipelineLayout (device, context->pipelineLayout, nullptr);
+  vkDestroyPipeline (device, context->pipeline, nullptr);
+  vkDestroyDescriptorSetLayout (device, context->descriptorSetLayout, nullptr);
+  vkDestroySampler (device, context->fontSampler, nullptr);
+  vkDestroyImageView (device, context->fontTexture.view, nullptr);
   vmaDestroyImage (context->allocator, context->fontTexture.handle, context->fontTexture.allocation);
 
   ImGuiIO& io = ImGui::GetIO ();

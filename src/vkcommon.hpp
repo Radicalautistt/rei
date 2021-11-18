@@ -14,6 +14,14 @@
 #  define VULKAN_NO_FLAGS 0u
 #endif
 
+#ifndef VULKAN_TEXTURE_FORMAT
+#  define VULKAN_TEXTURE_FORMAT VK_FORMAT_R8G8B8A8_SRGB
+#endif
+
+#ifndef VULKAN_DEPTH_FORMAT
+#  define VULKAN_DEPTH_FORMAT VK_FORMAT_X8_D24_UNORM_PACK32
+#endif
+
 #ifdef NDEBUG
 #  ifndef VK_CHECK
 #    define VK_CHECK(call) call

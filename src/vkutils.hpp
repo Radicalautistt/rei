@@ -22,8 +22,6 @@ struct QueueFamilyIndices {
 };
 
 struct Image {
-  VkFormat format;
-
   VkImage handle;
   VkImageView view;
   VmaAllocation allocation;
@@ -109,10 +107,8 @@ struct ImageLayoutTransitionInfo {
 };
 
 struct TextureAllocationInfo {
-  Bool32 compressed;
-  Uint32 mipLevels;
-  Uint32 width, height;
   char* pixels;
+  Uint32 width, height;
   size_t compressedSize;
 };
 

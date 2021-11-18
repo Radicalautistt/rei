@@ -265,6 +265,9 @@ void Model::initDescriptors (VkDevice device) {
 
   {
     VkSamplerCreateInfo createInfo {SAMPLER_CREATE_INFO};
+    createInfo.minLod = 0.f;
+    // FIXME Don't hardcode number of mip levels
+    createInfo.maxLod = 11.f;
     createInfo.minFilter = VK_FILTER_LINEAR;
     createInfo.magFilter = VK_FILTER_LINEAR;
     createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;

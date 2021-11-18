@@ -14,9 +14,6 @@ struct Window;
 namespace rei::imgui {
 
 struct ContextCreateInfo {
-  VkDevice device;
-  VmaAllocator allocator;
-
   VkPipelineCache pipelineCache;
 
   VkDescriptorPool descriptorPool;
@@ -35,7 +32,6 @@ struct Context {
 
   ImGuiContext* handle;
 
-  VkDevice device;
   VmaAllocator allocator;
 
   VkPipelineLayout pipelineLayout;
@@ -61,8 +57,8 @@ struct Context {
   void renderDrawData (VkCommandBuffer commandBuffer, Uint32 frameIndex, const ImDrawData* drawData);
 };
 
-void create (const ContextCreateInfo* createInfo, Context* output);
-void destroy (Context* context);
+void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* createInfo, Context* output);
+void destroy (VkDevice device, Context* context);
 
 void showDebugWindow (Float32* cameraSpeed, VmaAllocator allocator);
 
