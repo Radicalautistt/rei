@@ -57,13 +57,6 @@ struct Swapchain {
   Image depthImage;
 };
 
-struct RenderPassCreateInfo {
-  uint32_t subpassCount;
-  uint32_t attachmentCount;
-  VkSubpassDescription* subpasses;
-  VkAttachmentDescription* attachments;
-};
-
 struct GraphicsPipelineCreateInfo {
   VkPipelineCache cache;
   VkRenderPass renderPass;

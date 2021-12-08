@@ -21,11 +21,7 @@ struct Batch {
 
 struct Model {
   VkSampler sampler;
-  VkPipeline pipeline;
-  VkPipelineLayout pipelineLayout;
-
   VkDescriptorPool descriptorPool;
-  VkDescriptorSetLayout albedoLayout;
 
   Material* materials;
   size_t materialsCount;
@@ -40,15 +36,7 @@ struct Model {
 
   math::Matrix4 modelMatrix;
 
-  void initDescriptors (VkDevice device);
-
-  void initPipelines (
-    VkDevice device,
-    VkRenderPass renderPass,
-    VkPipelineCache pipelineCache,
-    const vku::Swapchain* swapchain
-  );
-
+  void initDescriptors (VkDevice device, VkDescriptorSetLayout descriptorLayout);
   void draw (VkCommandBuffer commandBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection);
 };
 

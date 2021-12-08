@@ -229,14 +229,10 @@ void load (
 }
 
 void destroy (VkDevice device, VmaAllocator allocator, Model* model) {
-  vkDestroyPipeline (device, model->pipeline, nullptr);
-  vkDestroyPipelineLayout (device, model->pipelineLayout, nullptr);
   vmaDestroyBuffer (allocator, model->indexBuffer.handle, model->indexBuffer.allocation);
   vmaDestroyBuffer (allocator, model->vertexBuffer.handle, model->vertexBuffer.allocation);
 
   vkDestroySampler (device, model->sampler, nullptr);
-  vkDestroyDescriptorSetLayout (device, model->albedoLayout, nullptr);
-
   free (model->materials);
 
   vkDestroyDescriptorPool (device, model->descriptorPool, nullptr);
@@ -251,7 +247,7 @@ void destroy (VkDevice device, VmaAllocator allocator, Model* model) {
   free (model->batches);
 }
 
-void Model::initDescriptors (VkDevice device) {
+void Model::initDescriptors (VkDevice device, VkDescriptorSetLayout descriptorLayout) {
   {
     VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (Uint32) texturesCount};
 
@@ -278,21 +274,6 @@ void Model::initDescriptors (VkDevice device) {
     VK_CHECK (vkCreateSampler (device, &createInfo, nullptr, &sampler));
   }
 
-  {
-    VkDescriptorSetLayoutBinding albedo;
-    albedo.binding = 0;
-    albedo.descriptorCount = 1;
-    albedo.pImmutableSamplers = nullptr;
-    albedo.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    albedo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-
-    VkDescriptorSetLayoutCreateInfo createInfo {DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    createInfo.bindingCount = 1;
-    createInfo.pBindings = &albedo;
-
-    VK_CHECK (vkCreateDescriptorSetLayout (device, &createInfo, nullptr, &albedoLayout));
-  }
-
   // Batch all descriptor writes to make a single vkUpdateDescriptorSets call.
   auto writes = MALLOC (VkWriteDescriptorSet, materialsCount);
   auto imageInfos = MALLOC (VkDescriptorImageInfo, materialsCount);
@@ -305,7 +286,7 @@ void Model::initDescriptors (VkDevice device) {
     {
       VkDescriptorSetAllocateInfo allocationInfo {DESCRIPTOR_SET_ALLOCATE_INFO};
       allocationInfo.descriptorSetCount = 1;
-      allocationInfo.pSetLayouts = &albedoLayout;
+      allocationInfo.pSetLayouts = &descriptorLayout;
       allocationInfo.descriptorPool = descriptorPool;
 
       VK_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &current->descriptorSet));
@@ -330,129 +311,11 @@ void Model::initDescriptors (VkDevice device) {
   free (imageInfos);
 }
 
-void Model::initPipelines (
-  VkDevice device,
-  VkRenderPass renderPass,
-  VkPipelineCache pipelineCache,
-  const vku::Swapchain* swapchain) {
-
-  {
-    VkPushConstantRange pushConstantRange;
-    pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof (math::Matrix4);
-    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    VkPipelineLayoutCreateInfo createInfo {PIPELINE_LAYOUT_CREATE_INFO};
-    createInfo.setLayoutCount = 1;
-    createInfo.pushConstantRangeCount = 1;
-    createInfo.pPushConstantRanges = &pushConstantRange;
-    // TODO create different pipelines for every sampler combination (e.g albedo, albedo + normal, etc)
-    createInfo.pSetLayouts = &albedoLayout;
-
-    VK_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &pipelineLayout));
-  }
-
-  VkVertexInputBindingDescription binding;
-  binding.binding = 0;
-  binding.stride = sizeof (Vertex);
-  binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-  VkVertexInputAttributeDescription vertexAttributes[3];
-
-  // Position
-  vertexAttributes[0].location = 0;
-  vertexAttributes[0].binding = binding.binding;
-  vertexAttributes[0].offset = offsetof (Vertex, x);
-  vertexAttributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-
-  // Normal
-  vertexAttributes[1].location = 1;
-  vertexAttributes[1].binding = binding.binding;
-  vertexAttributes[1].offset = offsetof (Vertex, nx);
-  vertexAttributes[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-
-  // Uv
-  vertexAttributes[2].location = 2;
-  vertexAttributes[2].binding = binding.binding;
-  vertexAttributes[2].offset = offsetof (Vertex, u);
-  vertexAttributes[2].format = VK_FORMAT_R32G32_SFLOAT;
-
-  VkPipelineVertexInputStateCreateInfo vertexInputState {PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-  vertexInputState.vertexBindingDescriptionCount = 1;
-  vertexInputState.pVertexBindingDescriptions = &binding;
-  vertexInputState.pVertexAttributeDescriptions = vertexAttributes;
-  vertexInputState.vertexAttributeDescriptionCount = ARRAY_SIZE (vertexAttributes);
-
-  VkRect2D scissor;
-  scissor.offset = {0, 0};
-  scissor.extent = swapchain->extent;
-
-  VkViewport viewport;
-  viewport.x = 0.f;
-  viewport.y = 0.f;
-  viewport.minDepth = 0.f;
-  viewport.maxDepth = 1.f;
-  viewport.width = (Float32) swapchain->extent.width;
-  viewport.height = (Float32) swapchain->extent.height;
-
-  VkPipelineViewportStateCreateInfo viewportState {PIPELINE_VIEWPORT_STATE_CREATE_INFO};
-  viewportState.scissorCount = 1;
-  viewportState.viewportCount = 1;
-  viewportState.pScissors = &scissor;
-  viewportState.pViewports = &viewport;
-
-  VkPipelineRasterizationStateCreateInfo rasterizationState {PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
-  rasterizationState.lineWidth = 1.f;
-  rasterizationState.depthBiasEnable = VK_FALSE;
-  rasterizationState.depthClampEnable = VK_FALSE;
-  rasterizationState.cullMode = VK_CULL_MODE_NONE;
-  rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
-  rasterizationState.rasterizerDiscardEnable = VK_FALSE;
-  rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
-
-  VkPipelineDepthStencilStateCreateInfo depthStencilState {PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
-  depthStencilState.minDepthBounds = 0.f;
-  depthStencilState.maxDepthBounds = 1.f;
-
-  depthStencilState.depthTestEnable = VK_TRUE;
-  depthStencilState.depthWriteEnable = VK_TRUE;
-  depthStencilState.stencilTestEnable = VK_FALSE;
-  depthStencilState.depthBoundsTestEnable = VK_FALSE;
-  depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
-
-  VkPipelineColorBlendAttachmentState colorBlendAttachment {};
-  colorBlendAttachment.blendEnable = VK_FALSE,
-  colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
-  colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-  colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-  colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-
-  vku::GraphicsPipelineCreateInfo createInfo;
-  createInfo.cache = pipelineCache;
-  createInfo.layout = pipelineLayout;
-  createInfo.renderPass = renderPass;
-  createInfo.colorBlendAttachmentCount = 1;
-  createInfo.pixelShaderPath = "assets/shaders/mesh.frag.spv";
-  createInfo.vertexShaderPath = "assets/shaders/mesh.vert.spv";
-
-  createInfo.dynamicState = nullptr;
-  createInfo.viewportState = &viewportState;
-  createInfo.depthStencilState = &depthStencilState;
-  createInfo.vertexInputState = &vertexInputState;
-  createInfo.rasterizationState = &rasterizationState;
-  createInfo.colorBlendAttachment = &colorBlendAttachment;
-
-  vku::createGraphicsPipeline (device, &createInfo, &pipeline);
-}
-
 void Model::draw (VkCommandBuffer commandBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection) {
-  //vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
   VkDeviceSize offset = 0;
   vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffer.handle, &offset);
   vkCmdBindIndexBuffer (commandBuffer, indexBuffer.handle, 0, VK_INDEX_TYPE_UINT32);
 
-  //math::Matrix4 mvp = *viewProjection * modelMatrix;
   math::Matrix4 matrices[2] {*viewProjection * modelMatrix, modelMatrix};
   vkCmdPushConstants (commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Matrix4) * 2, matrices);
 

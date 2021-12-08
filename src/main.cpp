@@ -19,11 +19,10 @@ struct Frame {
   VkCommandPool commandPool;
   VkCommandBuffer offscreenCmd;
   VkCommandBuffer compositionCmd;
-  //VkCommandBuffer* compositionCmds;
 
-  VkFence renderFence;
   VkFence offscreenFence;
-  VkSemaphore renderSemaphore;
+  VkFence compositionFence;
+  VkSemaphore compositionSemaphore;
   VkSemaphore presentSemaphore;
   VkSemaphore offscreenSemaphore;
 };
@@ -435,9 +434,11 @@ static void destroyGBuffer (VkDevice device, VmaAllocator allocator, GBuffer* gb
   vkDestroyPipeline (device, gbuffer->geometryPass.pipeline, nullptr);
   vkDestroyPipelineLayout (device, gbuffer->lightPass.pipelineLayout, nullptr);
   vkDestroyPipelineLayout (device, gbuffer->geometryPass.pipelineLayout, nullptr);
+
   vkDestroyDescriptorSetLayout (device, gbuffer->geometryPass.descriptorLayout, nullptr);
   vkDestroyDescriptorSetLayout (device, gbuffer->lightPass.descriptorLayout, nullptr);
   vkDestroySampler (device, gbuffer->sampler, nullptr);
+
   vkDestroyFramebuffer (device, gbuffer->geometryPass.framebuffer, nullptr);
   vkDestroyRenderPass (device, gbuffer->geometryPass.renderPass, nullptr);
 
@@ -760,9 +761,9 @@ int main () {
 
       VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->compositionCmd));
       VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->offscreenCmd));
-      VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current->renderFence));
+      VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current->compositionFence));
       VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current->offscreenFence));
-      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->renderSemaphore));
+      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->compositionSemaphore));
       VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->presentSemaphore));
       VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->offscreenSemaphore));
     }
@@ -829,8 +830,7 @@ int main () {
   }
 
   rei::gltf::load (device, allocator, &transferContext, "assets/models/sponza-scene/Sponza.gltf", &sponza);
-  sponza.initDescriptors (device);
-  sponza.initPipelines (device, defaultRenderPass, pipelineCache, &swapchain);
+  sponza.initDescriptors (device, gbuffer.geometryPass.descriptorLayout);
 
   Bool32 running = True;
   Float32 lastTime = 0.f;
@@ -908,7 +908,7 @@ int main () {
     auto offscreenCmd = currentFrame->offscreenCmd;
     auto compositionCmd = currentFrame->compositionCmd;
 
-    VkFence fences[2] {currentFrame->renderFence, currentFrame->offscreenFence};
+    VkFence fences[2] {currentFrame->compositionFence, currentFrame->offscreenFence};
 
     VK_CHECK (vkWaitForFences (device, 2, fences, VK_TRUE, ~0ull));
     VK_CHECK (vkResetFences (device, 2, fences));
@@ -982,9 +982,9 @@ int main () {
       submitInfo.pCommandBuffers = &compositionCmd;
       submitInfo.pWaitDstStageMask = &pipelineWaitStage;
       submitInfo.pWaitSemaphores = &currentFrame->offscreenSemaphore;
-      submitInfo.pSignalSemaphores = &currentFrame->renderSemaphore;
+      submitInfo.pSignalSemaphores = &currentFrame->compositionSemaphore;
 
-      VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->renderFence));
+      VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->compositionFence));
     }
 
     // Present resulting image
@@ -996,7 +996,7 @@ int main () {
     presentInfo.sType = PRESENT_INFO_KHR;
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.pSwapchains = &swapchain.handle;
-    presentInfo.pWaitSemaphores = &currentFrame->renderSemaphore;
+    presentInfo.pWaitSemaphores = &currentFrame->compositionSemaphore;
 
     VK_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
     ++frameIndex;
@@ -1033,9 +1033,9 @@ int main () {
     auto current = &frames[index];
     vkDestroySemaphore (device, current->offscreenSemaphore, nullptr);
     vkDestroySemaphore (device, current->presentSemaphore, nullptr);
-    vkDestroySemaphore (device, current->renderSemaphore, nullptr);
+    vkDestroySemaphore (device, current->compositionSemaphore, nullptr);
     vkDestroyFence (device, current->offscreenFence, nullptr);
-    vkDestroyFence (device, current->renderFence, nullptr);
+    vkDestroyFence (device, current->compositionFence, nullptr);
     vkDestroyCommandPool (device, current->commandPool, nullptr);
   }
 
