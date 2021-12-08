@@ -922,11 +922,13 @@ int main () {
     vkCmdBindPipeline (offscreenCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer.geometryPass.pipeline);
 
     {
+      rei::math::Vector3 center;
       rei::math::Matrix4 viewMatrix;
-      auto center = camera.position + camera.front;
+      rei::math::Vector3::add (&camera.position, &camera.front, &center);
       rei::math::lookAt (&camera.position, &center, &camera.up, &viewMatrix);
 
-      rei::math::Matrix4 viewProjection = camera.projection * viewMatrix;
+      rei::math::Matrix4 viewProjection;
+      rei::math::Matrix4::mul (&camera.projection, &viewMatrix, &viewProjection);
       sponza.draw (offscreenCmd, gbuffer.geometryPass.pipelineLayout, &viewProjection);
     }
 

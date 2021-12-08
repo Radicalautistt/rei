@@ -1,13 +1,9 @@
+#include <math.h>
 #include "math.hpp"
 
 namespace rei::math {
 
-void lookAt (
-  const Vector3* eye,
-  const Vector3* center,
-  const Vector3* up,
-  Matrix4* output) noexcept {
-
+void lookAt (const Vector3* eye, const Vector3* center, const Vector3* up, Matrix4* out) {
   using namespace simd;
   auto eyeM128 = eye->load ();
   auto z = m128::normalize (_mm_sub_ps (center->load (), eyeM128));
@@ -28,42 +24,51 @@ void lookAt (
   _mm_store_ps (&result.y.x, y);
   _mm_store_ps (&result.z.x, z);
 
-  output->rows[0].x = result.x.x;
-  output->rows[0].y = result.y.x;
-  output->rows[0].z = result.z.x;
-  output->rows[0].w = 0.f;
+  out->rows[0].x = result.x.x;
+  out->rows[0].y = result.y.x;
+  out->rows[0].z = result.z.x;
+  out->rows[0].w = 0.f;
 
-  output->rows[1].x = result.x.y;
-  output->rows[1].y = result.y.y;
-  output->rows[1].z = result.z.y;
-  output->rows[1].w = 0.f;
+  out->rows[1].x = result.x.y;
+  out->rows[1].y = result.y.y;
+  out->rows[1].z = result.z.y;
+  out->rows[1].w = 0.f;
 
-  output->rows[2].x = result.x.z;
-  output->rows[2].y = result.y.z;
-  output->rows[2].z = result.z.z;
-  output->rows[2].w = 0.f;
+  out->rows[2].x = result.x.z;
+  out->rows[2].y = result.y.z;
+  out->rows[2].z = result.z.z;
+  out->rows[2].w = 0.f;
 
-  output->rows[3].x = -dotXEye;
-  output->rows[3].y = -dotYEye;
-  output->rows[3].z = dotZEye;
-  output->rows[3].w = 1.f;
+  out->rows[3].x = -dotXEye;
+  out->rows[3].y = -dotYEye;
+  out->rows[3].z = dotZEye;
+  out->rows[3].w = 1.f;
 }
 
 // This function is basically stolen from GLM
-void perspective (
-  Float32 verticalFOV,
-  Float32 aspectRatio,
-  Float32 zNear,
-  Float32 zFar,
-  Matrix4& output) noexcept {
-
+void perspective (Float32 fov, Float32 aspect, Float32 zNear, Float32 zFar, Matrix4* out) {
   Float32 zLength = zFar - zNear;
-  Float32 focalLength = 1.f / tanf (verticalFOV / 2.f);
+  Float32 focalLength = 1.f / tanf (fov / 2.f);
 
-  output[0] = {focalLength / aspectRatio, 0.f, 0.f, 0.f};
-  output[1] = {0.f, -focalLength, 0.f, 0.f};
-  output[2] = {0.f, 0.f, -(zFar + zNear) / zLength , -1.f};
-  output[3] = {0.f, 0.f, -(2 * zFar * zNear) / zLength, 0.f};
+  out->rows[0].x = focalLength / aspect;
+  out->rows[0].y = 0.f;
+  out->rows[0].z = 0.f;
+  out->rows[0].w = 0.f;
+
+  out->rows[1].x = 0.f;
+  out->rows[1].y = -focalLength;
+  out->rows[1].z = 0.f;
+  out->rows[1].w = 0.f;
+
+  out->rows[2].x = 0.f;
+  out->rows[2].y = 0.f;
+  out->rows[2].z = -(zFar + zNear) / zLength;
+  out->rows[2].w = -1.f;
+
+  out->rows[3].x = 0.f;
+  out->rows[3].y = 0.f;
+  out->rows[3].z = -(2 * zFar * zNear) / zLength;
+  out->rows[3].w = 0.f;
 }
 
 }

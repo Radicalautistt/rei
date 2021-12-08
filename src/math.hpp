@@ -1,7 +1,6 @@
 #ifndef MATH_HPP
 #define MATH_HPP
 
-#include <math.h>
 #include <immintrin.h>
 
 #include "common.hpp"
@@ -13,14 +12,6 @@
 #ifndef PI_BY_180
 // PI / 180. Used for to convert degrees to radians
 #  define PI_BY_180 0.01745329251994329576923690768489f
-#endif
-
-#ifndef GET_RESULT
-// Load values from a simd register into a vector of a given type
-#  define GET_RESULT(VectorType, simdRegister) \
-    VectorType result;                         \
-    _mm_store_ps (&result.x, simdRegister);    \
-    return result
 #endif
 
 namespace rei::math {
@@ -98,29 +89,16 @@ struct alignas (16) Vector3 {
     return _mm_set_ps (0.f, z, y, x);
   }
 
-  inline Vector3& operator += (Float32 scalar) noexcept {
-    _mm_store_ps (&this->x, _mm_add_ps (_mm_set1_ps (scalar), this->load ()));
-    return *this;
+  static inline void add (const Vector3* a, const Vector3* b, Vector3* out) {
+    _mm_store_ps (&out->x, _mm_add_ps (a->load (), b->load ()));
   }
 
-  inline Vector3& operator += (const Vector3& other) noexcept {
-    _mm_store_ps (&this->x, _mm_add_ps (this->load (), other.load ()));
-    return *this;
+  static inline void sub (const Vector3* a, const Vector3* b, Vector3* out) {
+    _mm_store_ps (&out->x, _mm_sub_ps (a->load (), b->load ()));
   }
 
-  inline Vector3& operator *= (Float32 scalar) noexcept {
-    _mm_store_ps (&this->x, _mm_mul_ps (_mm_set1_ps (scalar), this->load ()));
-    return *this;
-  }
-
-  inline Vector3& operator *= (const Vector3& other) noexcept {
-    _mm_store_ps (&this->x, _mm_mul_ps (this->load (), other.load ()));
-    return *this;
-  }
-
-  inline Vector3& operator -= (const Vector3& other) noexcept {
-    _mm_store_ps (&this->x, _mm_sub_ps (this->load (), other.load ()));
-    return *this;
+  static inline void mulScalar (const Vector3* vector, Float32 scalar, Vector3* out) {
+    _mm_store_ps (&out->x, _mm_mul_ps (_mm_set1_ps (scalar), vector->load ()));
   }
 
   static inline void normalize (Vector3* output) noexcept {
@@ -136,14 +114,6 @@ struct alignas (16) Vector3 {
   }
 };
 
-inline Vector3 operator + (const Vector3& a, const Vector3& b) noexcept {
-  GET_RESULT (Vector3, _mm_add_ps (a.load (), b.load ()));
-}
-
-inline Vector3 operator * (const Vector3& a, const Vector3& b) noexcept {
-  GET_RESULT (Vector3, _mm_mul_ps (a.load (), b.load ()));
-}
-
 struct Vector4 {
   Float32 x, y, z, w;
 
@@ -157,15 +127,15 @@ struct Vector4 {
   [[nodiscard]] inline __m128 load () const noexcept {
     return _mm_load_ps (&this->x);
   }
+
+  static inline void add (const Vector4* a, const Vector4* b, Vector4* out) {
+    _mm_store_ps (&out->x, _mm_add_ps (a->load (), b->load ()));
+  }
+
+  static inline void mulScalar (const Vector4* vector, Float32 scalar, Vector4* out) {
+    _mm_store_ps (&out->x, _mm_mul_ps (_mm_set1_ps (scalar), vector->load ()));
+  }
 };
-
-inline Vector4 operator + (const Vector4& a, const Vector4& b) noexcept {
-  GET_RESULT (Vector4, _mm_add_ps (a.load (), b.load ()));
-}
-
-inline Vector4 operator * (const Vector4& vector, Float32 scalar) noexcept {
-  GET_RESULT (Vector4, _mm_mul_ps (vector.load (), _mm_set1_ps (scalar)));
-}
 
 struct Matrix4 {
   Vector4 rows[4];
@@ -193,100 +163,68 @@ struct Matrix4 {
     rows[3].w = value;
   }
 
-  Matrix4 (
-    const Vector4& a,
-    const Vector4& b,
-    const Vector4& c,
-    const Vector4& d) {
-
-    rows[0].x = a.x;
-    rows[0].y = a.y;
-    rows[0].z = a.z;
-    rows[0].w = a.w;
-
-    rows[1].x = b.x;
-    rows[1].y = b.y;
-    rows[1].z = b.z;
-    rows[1].w = b.w;
-
-    rows[2].x = c.x;
-    rows[2].y = c.y;
-    rows[2].z = c.z;
-    rows[2].w = c.w;
-
-    rows[3].x = d.x;
-    rows[3].y = d.y;
-    rows[3].z = d.z;
-    rows[3].w = d.w;
-  }
-
-  inline Vector4& operator [] (Uint8 index) noexcept {
-    return rows[index];
-  }
-
-  inline const Vector4& operator [] (Uint8 index) const noexcept {
-    return rows[index];
-  }
-
   static inline void scale (Matrix4* matrix, const Vector3* vector) noexcept {
-    matrix->rows[0] = matrix->rows[0] * vector->x;
-    matrix->rows[1] = matrix->rows[1] * vector->y;
-    matrix->rows[2] = matrix->rows[2] * vector->z;
+    Vector4 temp;
+    Vector4::mulScalar (&matrix->rows[0], vector->x, &temp);
+    matrix->rows[0] = temp;
+    Vector4::mulScalar (&matrix->rows[1], vector->y, &temp);
+    matrix->rows[1] = temp;
+    Vector4::mulScalar (&matrix->rows[2], vector->z, &temp);
+    matrix->rows[2] = temp;
   }
 
   static inline void translate (Matrix4* matrix, const Vector3* vector) noexcept {
-    matrix->rows[3] =
-      matrix->rows[0] * vector->x +
-      matrix->rows[1] * vector->y +
-      matrix->rows[2] * vector->z + matrix->rows[3];
+    // matrix->rows[3] =
+    //   matrix->rows[0] * vector->x +
+    //   matrix->rows[1] * vector->y +
+    //   matrix->rows[2] * vector->z + matrix->rows[3];
+
+    Vector4 a, b, c;
+    Vector4::mulScalar (&matrix->rows[0], vector->x, &a);
+    Vector4::mulScalar (&matrix->rows[1], vector->y, &b);
+    Vector4::mulScalar (&matrix->rows[2], vector->z, &c);
+
+    Vector4::add (&a, &b, &b);
+    Vector4::add (&b, &c, &c);
+    Vector4::add (&c, &matrix->rows[3], &matrix->rows[3]);
+  }
+
+  static inline void mul (const Matrix4* a, const Matrix4* b, Matrix4* out) noexcept {
+    // out[0] = a[0] * b[0].x + a[1] * b[0].y + a[2] * b[0].z + a[3] * b[0].w;
+    // out[1] = a[0] * b[1].x + a[1] * b[1].y + a[2] * b[1].z + a[3] * b[1].w;
+    // out[2] = a[0] * b[2].x + a[1] * b[2].y + a[2] * b[2].z + a[3] * b[2].w;
+    // out[3] = a[0] * b[3].x + a[1] * b[3].y + a[2] * b[3].z + a[3] * b[3].w;
+
+    __m128 aRows[4];
+    aRows[0] = a->rows[0].load ();
+    aRows[1] = a->rows[1].load ();
+    aRows[2] = a->rows[2].load ();
+    aRows[3] = a->rows[3].load ();
+
+    #define MUL_ROW(row) do {                                     \
+      auto left = _mm_add_ps (                                    \
+        _mm_mul_ps (aRows[0], _mm_set1_ps (b->rows[row].x)),      \
+        _mm_mul_ps (aRows[1], _mm_set1_ps (b->rows[row].y))       \
+      );                                                          \
+                                                                  \
+      auto right = _mm_add_ps (                                   \
+        _mm_mul_ps (aRows[2], _mm_set1_ps (b->rows[row].z)),      \
+        _mm_mul_ps (aRows[3], _mm_set1_ps (b->rows[row].w))       \
+      );                                                          \
+                                                                  \
+      _mm_store_ps (&out->rows[row].x, _mm_add_ps (left, right)); \
+    } while (0)
+
+    MUL_ROW (0);
+    MUL_ROW (1);
+    MUL_ROW (2);
+    MUL_ROW (3);
+    #undef MUL_ROW
   }
 };
 
-inline Matrix4 operator * (const Matrix4& a, const Matrix4& b) noexcept {
-  Matrix4 result;
-  __m128 aRows[4];
-  aRows[0] = a[0].load ();
-  aRows[1] = a[1].load ();
-  aRows[2] = a[2].load ();
-  aRows[3] = a[3].load ();
-
-  for (Uint8 index = 0; index < 4; ++index) {
-    auto left = _mm_add_ps (
-      _mm_mul_ps (aRows[0], _mm_set1_ps (b[index].x)),
-      _mm_mul_ps (aRows[1], _mm_set1_ps (b[index].y))
-    );
-
-    auto right = _mm_add_ps (
-      _mm_mul_ps (aRows[2], _mm_set1_ps (b[index].z)),
-      _mm_mul_ps (aRows[3], _mm_set1_ps (b[index].w))
-    );
-
-    _mm_store_ps (&result[index].x, _mm_add_ps (left, right));
-  }
-
-  // NOTE For my future self: the simd code above is basically this nice and clean scalar piece
-  // result[0] = a[0] * b[0].x + a[1] * b[0].y + a[2] * b[0].z + a[3] * b[0].w;
-  // result[1] = a[0] * b[1].x + a[1] * b[1].y + a[2] * b[1].z + a[3] * b[1].w;
-  // result[2] = a[0] * b[2].x + a[1] * b[2].y + a[2] * b[2].z + a[3] * b[2].w;
-  // result[3] = a[0] * b[3].x + a[1] * b[3].y + a[2] * b[3].z + a[3] * b[3].w;
-
-  return result;
-}
-
-void lookAt (
-  const Vector3* eye,
-  const Vector3* center,
-  const Vector3* up,
-  Matrix4* output
-) noexcept;
-
-void perspective (
-  Float32 verticalFOV,
-  Float32 aspectRatio,
-  Float32 zNear,
-  Float32 zFar,
-  Matrix4& output
-) noexcept;
+void lookAt (const Vector3* eye, const Vector3* center, const Vector3* up, Matrix4* out);
+void perspective (Float32 fov, Float32 aspect, Float32 zNear, Float32 zFar, Matrix4* out);
 
 }
 

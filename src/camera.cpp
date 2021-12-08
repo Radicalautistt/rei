@@ -1,3 +1,4 @@
+#include <math.h>
 #include "camera.hpp"
 
 namespace rei {
@@ -37,11 +38,31 @@ void Camera::handleMouseMovement (Float32 x, Float32 y) noexcept {
 
 void Camera::move (Direction direction, Float32 deltaTime) noexcept {
   Float32 velocity = speed * deltaTime;
+
   switch (direction) {
-    case Direction::Left: position -= right * velocity; break;
-    case Direction::Right: position += right * velocity; break;
-    case Direction::Forward: position += front * velocity; break;
-    case Direction::Backward: position -= front * velocity; break;
+    case Direction::Left: {
+      math::Vector3 temp;
+      math::Vector3::mulScalar (&right, velocity, &temp);
+      math::Vector3::sub (&position, &temp, &position);
+    } break;
+
+    case Direction::Right: {
+      math::Vector3 temp;
+      math::Vector3::mulScalar (&right, velocity, &temp);
+      math::Vector3::add (&position, &temp, &position);
+    } break;
+
+    case Direction::Forward: {
+      math::Vector3 temp;
+      math::Vector3::mulScalar (&front, velocity, &temp);
+      math::Vector3::add (&position, &temp, &position);
+    } break;
+
+    case Direction::Backward: {
+      math::Vector3 temp;
+      math::Vector3::mulScalar (&front, velocity, &temp);
+      math::Vector3::sub (&position, &temp, &position);
+    } break;
   }
 }
 
@@ -50,7 +71,7 @@ Camera::Camera (const math::Vector3& up, const math::Vector3& position, Float32 
   yaw {yaw}, pitch {pitch}, worldUp {up}, position {position} {
 
   update ();
-  math::perspective (math::radians (zoom), 1680.f / 1050.f, 0.1f, 100.f, projection);
+  math::perspective (math::radians (zoom), 1680.f / 1050.f, 0.1f, 100.f, &projection);
 }
 
 }

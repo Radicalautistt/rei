@@ -1,3 +1,4 @@
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -316,7 +317,9 @@ void Model::draw (VkCommandBuffer commandBuffer, VkPipelineLayout layout, const 
   vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffer.handle, &offset);
   vkCmdBindIndexBuffer (commandBuffer, indexBuffer.handle, 0, VK_INDEX_TYPE_UINT32);
 
-  math::Matrix4 matrices[2] {*viewProjection * modelMatrix, modelMatrix};
+  math::Matrix4 matrices[2];
+  math::Matrix4::mul (viewProjection, &modelMatrix, &matrices[0]);
+  matrices[1] = modelMatrix;
   vkCmdPushConstants (commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Matrix4) * 2, matrices);
 
   for (size_t index = 0; index < materialsCount; ++index) {
