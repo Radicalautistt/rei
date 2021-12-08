@@ -13,14 +13,443 @@
 #include <imgui/imgui.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
+#define GBUFFER_ATTACHMENT_COUNT 3u
+
 struct Frame {
   VkCommandPool commandPool;
-  VkCommandBuffer commandBuffer;
+  VkCommandBuffer offscreenCmd;
+  VkCommandBuffer compositionCmd;
+  //VkCommandBuffer* compositionCmds;
 
   VkFence renderFence;
+  VkFence offscreenFence;
   VkSemaphore renderSemaphore;
   VkSemaphore presentSemaphore;
+  VkSemaphore offscreenSemaphore;
 };
+
+struct GBufferCreateInfo {
+  Uint32 width, height;
+  VkPipelineCache pipelineCache;
+  VkDescriptorPool descriptorPool;
+  VkRenderPass lightRenderPass;
+};
+
+struct GBuffer {
+  VkSampler sampler;
+
+  struct {
+    VkDescriptorSetLayout descriptorLayout;
+    VkPipeline pipeline;
+    VkPipelineLayout pipelineLayout;
+
+    VkRenderPass renderPass;
+    VkFramebuffer framebuffer;
+    rei::vku::Image depthAttachment;
+    rei::vku::Image attachments[GBUFFER_ATTACHMENT_COUNT];
+    VkClearValue clearValues[GBUFFER_ATTACHMENT_COUNT + 1];
+  } geometryPass;
+
+  struct {
+    VkDescriptorSet descriptorSet;
+    VkDescriptorSetLayout descriptorLayout;
+
+    VkPipeline pipeline;
+    VkPipelineLayout pipelineLayout;
+
+    VkRenderPass renderPass;
+    VkClearValue clearValues[2];
+  } lightPass;
+};
+
+static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBufferCreateInfo* createInfo, GBuffer* out) {
+  for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+    rei::vku::AttachmentCreateInfo info;
+    info.width = createInfo->width;
+    info.height = createInfo->height;
+    info.format = VULKAN_TEXTURE_FORMAT;
+    info.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    info.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    rei::vku::createAttachment (device, allocator, &info, &out->geometryPass.attachments[index]);
+  }
+
+  {
+    rei::vku::AttachmentCreateInfo info;
+    info.width = createInfo->width;
+    info.height = createInfo->height;
+    info.format = VK_FORMAT_D24_UNORM_S8_UINT;
+    info.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    info.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    info.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    rei::vku::createAttachment (device, allocator, &info, &out->geometryPass.depthAttachment);
+  }
+
+  {
+    VkAttachmentReference references[GBUFFER_ATTACHMENT_COUNT];
+    VkAttachmentDescription attachments[GBUFFER_ATTACHMENT_COUNT + 1];
+
+    for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+      attachments[index].flags = VULKAN_NO_FLAGS;
+      attachments[index].format = VULKAN_TEXTURE_FORMAT;
+      attachments[index].samples = VK_SAMPLE_COUNT_1_BIT;
+      attachments[index].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      attachments[index].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+      attachments[index].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      attachments[index].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+      attachments[index].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+      attachments[index].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+      references[index].attachment = index;
+      references[index].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+
+    attachments[GBUFFER_ATTACHMENT_COUNT].flags = VULKAN_NO_FLAGS;
+    attachments[GBUFFER_ATTACHMENT_COUNT].format = VK_FORMAT_D24_UNORM_S8_UINT;
+    attachments[GBUFFER_ATTACHMENT_COUNT].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[GBUFFER_ATTACHMENT_COUNT].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[GBUFFER_ATTACHMENT_COUNT].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[GBUFFER_ATTACHMENT_COUNT].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[GBUFFER_ATTACHMENT_COUNT].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[GBUFFER_ATTACHMENT_COUNT].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[GBUFFER_ATTACHMENT_COUNT].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference depthReference;
+    depthReference.attachment = GBUFFER_ATTACHMENT_COUNT;
+    depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass;
+    subpass.flags = VULKAN_NO_FLAGS;
+    subpass.inputAttachmentCount = 0;
+    subpass.preserveAttachmentCount = 0;
+    subpass.pInputAttachments = nullptr;
+    subpass.pResolveAttachments = nullptr;
+    subpass.pPreserveAttachments = nullptr;
+    subpass.pColorAttachments = references;
+    subpass.pDepthStencilAttachment = &depthReference;
+    subpass.colorAttachmentCount = GBUFFER_ATTACHMENT_COUNT;
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+    VkRenderPassCreateInfo info;
+    info.pNext = nullptr;
+    info.subpassCount = 1;
+    info.dependencyCount = 0;
+    info.pSubpasses = &subpass;
+    info.flags = VULKAN_NO_FLAGS;
+    info.pDependencies = nullptr;
+    info.pAttachments = attachments;
+    info.sType = RENDER_PASS_CREATE_INFO;
+    info.attachmentCount = GBUFFER_ATTACHMENT_COUNT + 1;
+
+    VK_CHECK (vkCreateRenderPass (device, &info, nullptr, &out->geometryPass.renderPass));
+  }
+
+  out->lightPass.renderPass = createInfo->lightRenderPass;
+  out->lightPass.clearValues[0].color = {{0.f, 0.f, 0.f, 0.f}};
+  out->lightPass.clearValues[1].depthStencil = {1.f, 0};
+
+  for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index)
+    out->geometryPass.clearValues[index].color = {{0.f, 0.f, 0.f, 0.f}};
+
+  out->geometryPass.clearValues[GBUFFER_ATTACHMENT_COUNT].depthStencil = {1.f, 0};
+
+  {
+    VkImageView attachments[GBUFFER_ATTACHMENT_COUNT + 1] {
+      out->geometryPass.attachments[0].view,
+      out->geometryPass.attachments[1].view,
+      out->geometryPass.attachments[2].view,
+      out->geometryPass.depthAttachment.view,
+    };
+
+    VkFramebufferCreateInfo info;
+    info.layers = 1;
+    info.pNext = nullptr;
+    info.flags = VULKAN_NO_FLAGS;
+    info.width = createInfo->width;
+    info.pAttachments = attachments;
+    info.height = createInfo->height;
+    info.sType = FRAMEBUFFER_CREATE_INFO;
+    info.renderPass = out->geometryPass.renderPass;
+    info.attachmentCount = GBUFFER_ATTACHMENT_COUNT + 1;
+
+    VK_CHECK (vkCreateFramebuffer (device, &info, nullptr, &out->geometryPass.framebuffer));
+  }
+
+  {
+    VkSamplerCreateInfo info;
+    info.minLod = 0.f;
+    info.maxLod = 1.f;
+    info.pNext = nullptr;
+    info.mipLodBias = 0.f;
+    info.maxAnisotropy = 1.f;
+    info.flags = VULKAN_NO_FLAGS;
+    info.compareEnable = VK_FALSE;
+    info.sType = SAMPLER_CREATE_INFO;
+    info.anisotropyEnable = VK_FALSE;
+    info.magFilter = VK_FILTER_LINEAR;
+    info.minFilter = VK_FILTER_LINEAR;
+    info.compareOp = VK_COMPARE_OP_NEVER;
+    info.unnormalizedCoordinates = VK_FALSE;
+    info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    VK_CHECK (vkCreateSampler (device, &info, nullptr, &out->sampler));
+  }
+
+  {
+    VkDescriptorSetLayoutBinding bindings[GBUFFER_ATTACHMENT_COUNT];
+    for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+      bindings[index].binding = index;
+      bindings[index].descriptorCount = 1;
+      bindings[index].pImmutableSamplers = nullptr;
+      bindings[index].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+      bindings[index].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    }
+
+    VkDescriptorSetLayoutCreateInfo info;
+    info.pNext = nullptr;
+    info.pBindings = bindings;
+    info.flags = VULKAN_NO_FLAGS;
+    info.bindingCount = GBUFFER_ATTACHMENT_COUNT;
+    info.sType = DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+
+    VK_CHECK (vkCreateDescriptorSetLayout (device, &info, nullptr, &out->lightPass.descriptorLayout));
+
+    info.bindingCount = 1;
+    info.pBindings = &bindings[0];
+
+    VK_CHECK (vkCreateDescriptorSetLayout (device, &info, nullptr, &out->geometryPass.descriptorLayout));
+  }
+
+  {
+    VkDescriptorSetAllocateInfo allocationInfo;
+    allocationInfo.pNext = nullptr;
+    allocationInfo.descriptorSetCount = 1;
+    allocationInfo.sType = DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocationInfo.descriptorPool = createInfo->descriptorPool;
+    allocationInfo.pSetLayouts = &out->lightPass.descriptorLayout;
+
+    VK_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &out->lightPass.descriptorSet));
+  }
+
+  {
+    VkWriteDescriptorSet writes[GBUFFER_ATTACHMENT_COUNT];
+    VkDescriptorImageInfo imageInfos[GBUFFER_ATTACHMENT_COUNT];
+
+    for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+      imageInfos[index].sampler = out->sampler;
+      imageInfos[index].imageView = out->geometryPass.attachments[index].view;
+      imageInfos[index].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+      writes[index].pNext = nullptr;
+      writes[index].dstBinding = index;
+      writes[index].dstArrayElement = 0;
+      writes[index].descriptorCount = 1;
+      writes[index].pBufferInfo = nullptr;
+      writes[index].pTexelBufferView = nullptr;
+      writes[index].sType = WRITE_DESCRIPTOR_SET;
+      writes[index].pImageInfo = &imageInfos[index];
+      writes[index].dstSet = out->lightPass.descriptorSet;
+      writes[index].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    }
+
+    vkUpdateDescriptorSets (device, GBUFFER_ATTACHMENT_COUNT, writes, 0, nullptr);
+  }
+
+  {
+    VkPushConstantRange pushConstant;
+    pushConstant.offset = 0;
+    pushConstant.size = sizeof (rei::math::Matrix4) * 2;
+    pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkPipelineLayoutCreateInfo info;
+    info.pNext = nullptr;
+    info.setLayoutCount = 1;
+    info.flags = VULKAN_NO_FLAGS;
+    info.pushConstantRangeCount = 1;
+    info.pPushConstantRanges = &pushConstant;
+    info.sType = PIPELINE_LAYOUT_CREATE_INFO;
+    info.pSetLayouts = &out->geometryPass.descriptorLayout;
+
+    VK_CHECK (vkCreatePipelineLayout (device, &info, nullptr, &out->geometryPass.pipelineLayout));
+
+    info.pushConstantRangeCount = 0;
+    info.pPushConstantRanges = nullptr;
+    info.pSetLayouts = &out->lightPass.descriptorLayout;
+
+    VK_CHECK (vkCreatePipelineLayout (device, &info, nullptr, &out->lightPass.pipelineLayout));
+  }
+
+  {
+    VkVertexInputBindingDescription binding;
+    binding.binding = 0;
+    binding.stride = sizeof (rei::Vertex);
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription attributes[3];
+    attributes[0].location = 0;
+    attributes[0].binding = binding.binding;
+    attributes[0].offset = offsetof (rei::Vertex, x);
+    attributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+
+    attributes[1].location = 1;
+    attributes[1].binding = binding.binding;
+    attributes[1].offset = offsetof (rei::Vertex, nx);
+    attributes[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+
+    attributes[2].location = 2;
+    attributes[2].binding = binding.binding;
+    attributes[2].format = VK_FORMAT_R32G32_SFLOAT;
+    attributes[2].offset = offsetof (rei::Vertex, u);
+
+    VkPipelineVertexInputStateCreateInfo vertexInputState;
+    vertexInputState.pNext = nullptr;
+    vertexInputState.flags = VULKAN_NO_FLAGS;
+    vertexInputState.vertexBindingDescriptionCount = 1;
+    vertexInputState.vertexAttributeDescriptionCount = 3;
+    vertexInputState.pVertexBindingDescriptions = &binding;
+    vertexInputState.pVertexAttributeDescriptions = attributes;
+    vertexInputState.sType = PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+    VkRect2D scissor;
+    scissor.offset = {0, 0};
+    scissor.extent.width = createInfo->width;
+    scissor.extent.height = createInfo->height;
+
+    VkViewport viewport;
+    viewport.x = 0.f;
+    viewport.y = 0.f;
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+    viewport.width = (Float32) createInfo->width;
+    viewport.height = (Float32) createInfo->height;
+
+    VkPipelineViewportStateCreateInfo viewportState;
+    viewportState.pNext = nullptr;
+    viewportState.scissorCount = 1;
+    viewportState.viewportCount = 1;
+    viewportState.pScissors = &scissor;
+    viewportState.pViewports = &viewport;
+    viewportState.flags = VULKAN_NO_FLAGS;
+    viewportState.sType = PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+
+    VkPipelineRasterizationStateCreateInfo rasterizationState;
+    rasterizationState.pNext = nullptr;
+    rasterizationState.lineWidth = 1.f;
+    rasterizationState.depthBiasClamp = 0.f;
+    rasterizationState.flags = VULKAN_NO_FLAGS;
+    rasterizationState.depthBiasSlopeFactor = 0.f;
+    rasterizationState.depthBiasEnable = VK_FALSE;
+    rasterizationState.depthClampEnable = VK_FALSE;
+    rasterizationState.depthBiasConstantFactor = 0.f;
+    rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizationState.rasterizerDiscardEnable = VK_FALSE;
+    rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizationState.sType = PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilState;
+    depthStencilState.back = {};
+    depthStencilState.back.compareOp = VK_COMPARE_OP_ALWAYS;
+    depthStencilState.front = {};
+    depthStencilState.pNext = nullptr;
+    depthStencilState.minDepthBounds = 0.f;
+    depthStencilState.maxDepthBounds = 1.f;
+    depthStencilState.flags = VULKAN_NO_FLAGS;
+    depthStencilState.depthTestEnable = VK_TRUE;
+    depthStencilState.depthWriteEnable = VK_TRUE;
+    depthStencilState.stencilTestEnable = VK_FALSE;
+    depthStencilState.depthBoundsTestEnable = VK_FALSE;
+    depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depthStencilState.sType = PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachments[GBUFFER_ATTACHMENT_COUNT];
+
+    for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+      colorBlendAttachments[index].colorWriteMask = 0xF;
+      colorBlendAttachments[index].blendEnable = VK_FALSE;
+      colorBlendAttachments[index].colorBlendOp = VK_BLEND_OP_ADD;
+      colorBlendAttachments[index].alphaBlendOp = VK_BLEND_OP_ADD;
+      colorBlendAttachments[index].srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+      colorBlendAttachments[index].dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+      colorBlendAttachments[index].srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+      colorBlendAttachments[index].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    }
+
+    rei::vku::GraphicsPipelineCreateInfo info;
+    info.dynamicState = nullptr;
+    info.colorBlendAttachmentCount = 3;
+    info.cache = createInfo->pipelineCache;
+    info.layout = out->geometryPass.pipelineLayout;
+    info.renderPass = out->geometryPass.renderPass;
+
+    info.viewportState = &viewportState;
+    info.vertexInputState = &vertexInputState;
+    info.depthStencilState = &depthStencilState;
+    info.rasterizationState = &rasterizationState;
+    info.colorBlendAttachment = colorBlendAttachments;
+
+    info.pixelShaderPath = "assets/shaders/deferred_geometry.frag.spv";
+    info.vertexShaderPath = "assets/shaders/deferred_geometry.vert.spv";
+
+    rei::vku::createGraphicsPipeline (device, &info, &out->geometryPass.pipeline);
+
+    vertexInputState.vertexBindingDescriptionCount = 0;
+    vertexInputState.vertexAttributeDescriptionCount = 0;
+    vertexInputState.pVertexBindingDescriptions = nullptr;
+    vertexInputState.pVertexAttributeDescriptions = nullptr;
+
+    rasterizationState.cullMode = VK_CULL_MODE_FRONT_BIT;
+    rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment;
+    colorBlendAttachment.colorWriteMask = 0xF;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+
+    info.colorBlendAttachmentCount = 1;
+    info.renderPass = out->lightPass.renderPass;
+    info.layout = out->lightPass.pipelineLayout;
+    info.colorBlendAttachment = &colorBlendAttachment;
+    info.pixelShaderPath = "assets/shaders/deferred_light.frag.spv";
+    info.vertexShaderPath = "assets/shaders/deferred_light.vert.spv";
+
+    rei::vku::createGraphicsPipeline (device, &info, &out->lightPass.pipeline);
+  }
+}
+
+static void destroyGBuffer (VkDevice device, VmaAllocator allocator, GBuffer* gbuffer) {
+  vkDestroyPipeline (device, gbuffer->lightPass.pipeline, nullptr);
+  vkDestroyPipeline (device, gbuffer->geometryPass.pipeline, nullptr);
+  vkDestroyPipelineLayout (device, gbuffer->lightPass.pipelineLayout, nullptr);
+  vkDestroyPipelineLayout (device, gbuffer->geometryPass.pipelineLayout, nullptr);
+  vkDestroyDescriptorSetLayout (device, gbuffer->geometryPass.descriptorLayout, nullptr);
+  vkDestroyDescriptorSetLayout (device, gbuffer->lightPass.descriptorLayout, nullptr);
+  vkDestroySampler (device, gbuffer->sampler, nullptr);
+  vkDestroyFramebuffer (device, gbuffer->geometryPass.framebuffer, nullptr);
+  vkDestroyRenderPass (device, gbuffer->geometryPass.renderPass, nullptr);
+
+  vkDestroyImageView (device, gbuffer->geometryPass.depthAttachment.view, nullptr);
+  vmaDestroyImage (allocator, gbuffer->geometryPass.depthAttachment.handle, gbuffer->geometryPass.depthAttachment.allocation);
+
+  for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+    auto current = &gbuffer->geometryPass.attachments[index];
+    vkDestroyImageView (device, current->view, nullptr);
+    vmaDestroyImage (allocator, current->handle, current->allocation);
+  }
+}
 
 int main () {
   rei::xcb::Window window;
@@ -40,17 +469,17 @@ int main () {
   VmaAllocator allocator;
 
   rei::vku::Swapchain swapchain;
-  VkRenderPass renderPass;
+  VkRenderPass defaultRenderPass;
+
   Uint32 frameIndex = 0;
   Frame frames[FRAMES_COUNT];
   VkFramebuffer* framebuffers;
-  VkClearValue clearValues[2];
 
   VkPipelineCache pipelineCache;
   VkDescriptorPool mainDescriptorPool;
+  GBuffer gbuffer;
 
   rei::imgui::Context imguiContext;
-
   rei::vku::TransferContext transferContext;
 
   rei::gltf::Model sponza;
@@ -239,14 +668,7 @@ int main () {
     rei::vku::createSwapchain (&createInfo, &swapchain);
   }
 
-  { // Create main render pass
-    clearValues[0].color.float32[0] = 30.f / 255.f;
-    clearValues[0].color.float32[1] = 7.f / 255.f;
-    clearValues[0].color.float32[2] = 50.f / 255.f;
-    clearValues[0].color.float32[3] = 1.f;
-
-    clearValues[1].depthStencil.depth = 1.f;
-
+  { // Create default render pass
     VkAttachmentDescription attachments[2];
 
     // Color attachment
@@ -290,8 +712,10 @@ int main () {
     createInfo.attachmentCount = 2;
     createInfo.pSubpasses = &subpass;
     createInfo.pAttachments = attachments;
+    createInfo.dependencyCount = 0;
+    createInfo.pDependencies = nullptr;
 
-    VK_CHECK (vkCreateRenderPass (device, &createInfo, nullptr, &renderPass));
+    VK_CHECK (vkCreateRenderPass (device, &createInfo, nullptr, &defaultRenderPass));
   }
 
   { // Create framebuffers
@@ -300,7 +724,7 @@ int main () {
     VkFramebufferCreateInfo createInfo {FRAMEBUFFER_CREATE_INFO};
     createInfo.layers = 1;
     createInfo.attachmentCount = 2;
-    createInfo.renderPass = renderPass;
+    createInfo.renderPass = defaultRenderPass;
     createInfo.width = swapchain.extent.width;
     createInfo.height = swapchain.extent.height;
 
@@ -318,7 +742,6 @@ int main () {
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     VkCommandBufferAllocateInfo bufferInfo {COMMAND_BUFFER_ALLOCATE_INFO};
-    bufferInfo.commandBufferCount = 1;
     bufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
     VkFenceCreateInfo fenceInfo {FENCE_CREATE_INFO};
@@ -328,15 +751,20 @@ int main () {
 
     VkSemaphoreCreateInfo semaphoreInfo {SEMAPHORE_CREATE_INFO};
 
+    bufferInfo.commandBufferCount = 1;
     for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
       auto current = &frames[index];
       VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &current->commandPool));
 
       bufferInfo.commandPool = current->commandPool;
-      VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->commandBuffer));
+
+      VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->compositionCmd));
+      VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->offscreenCmd));
       VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current->renderFence));
+      VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current->offscreenFence));
       VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->renderSemaphore));
       VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->presentSemaphore));
+      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->offscreenSemaphore));
     }
 
     fenceInfo.flags = VULKAN_NO_FLAGS;
@@ -345,13 +773,13 @@ int main () {
 
   { // Create main descriptor pool
     VkDescriptorPoolSize sizes[1];
-    sizes[0].descriptorCount = 1;
+    sizes[0].descriptorCount = 1 + GBUFFER_ATTACHMENT_COUNT;
     sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
     VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
-    createInfo.maxSets = 1;
     createInfo.pPoolSizes = sizes;
     createInfo.poolSizeCount = ARRAY_SIZE (sizes);
+    createInfo.maxSets = 1 + GBUFFER_ATTACHMENT_COUNT;
     createInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &mainDescriptorPool));
@@ -378,10 +806,21 @@ int main () {
     if (cacheFile.contents) free (cacheFile.contents);
   }
 
+  {
+    GBufferCreateInfo createInfo;
+    createInfo.lightRenderPass = defaultRenderPass;
+    createInfo.pipelineCache = pipelineCache;
+    createInfo.width = swapchain.extent.width;
+    createInfo.height = swapchain.extent.height;
+    createInfo.descriptorPool = mainDescriptorPool;
+
+    createGBuffer (device, allocator, &createInfo, &gbuffer);
+  }
+
   { // Create imgui context
     rei::imgui::ContextCreateInfo createInfo;
     createInfo.window = &window;
-    createInfo.renderPass = renderPass;
+    createInfo.renderPass = defaultRenderPass;
     createInfo.pipelineCache = pipelineCache;
     createInfo.transferContext = &transferContext;
     createInfo.descriptorPool = mainDescriptorPool;
@@ -391,11 +830,12 @@ int main () {
 
   rei::gltf::load (device, allocator, &transferContext, "assets/models/sponza-scene/Sponza.gltf", &sponza);
   sponza.initDescriptors (device);
-  sponza.initPipelines (device, renderPass, pipelineCache, &swapchain);
+  sponza.initPipelines (device, defaultRenderPass, pipelineCache, &swapchain);
 
   Bool32 running = True;
   Float32 lastTime = 0.f;
   Float32 deltaTime = 0.f;
+  const Float32 defaultDelta = 1.f / 60.f;
 
   xcb_generic_event_t* event = nullptr;
 
@@ -404,6 +844,25 @@ int main () {
   cmdBeginInfo.pInheritanceInfo = nullptr;
   cmdBeginInfo.sType = COMMAND_BUFFER_BEGIN_INFO;
   cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  VkRenderPassBeginInfo offscreenBeginInfo;
+  offscreenBeginInfo.pNext = nullptr;
+  offscreenBeginInfo.renderArea.offset = {0, 0};
+  offscreenBeginInfo.sType = RENDER_PASS_BEGIN_INFO;
+  offscreenBeginInfo.renderArea.extent = swapchain.extent;
+  offscreenBeginInfo.renderPass = gbuffer.geometryPass.renderPass;
+  offscreenBeginInfo.framebuffer = gbuffer.geometryPass.framebuffer;
+  offscreenBeginInfo.pClearValues = gbuffer.geometryPass.clearValues;
+  offscreenBeginInfo.clearValueCount = ARRAY_SIZE (gbuffer.geometryPass.clearValues);
+
+  VkRenderPassBeginInfo compositionBeginInfo;
+  compositionBeginInfo.pNext = nullptr;
+  compositionBeginInfo.renderArea.offset = {0, 0};
+  compositionBeginInfo.sType = RENDER_PASS_BEGIN_INFO;
+  compositionBeginInfo.renderPass = defaultRenderPass;
+  compositionBeginInfo.renderArea.extent = swapchain.extent;
+  compositionBeginInfo.pClearValues = gbuffer.lightPass.clearValues;
+  compositionBeginInfo.clearValueCount = ARRAY_SIZE (gbuffer.lightPass.clearValues);
 
   VkPipelineStageFlags pipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
@@ -414,7 +873,7 @@ int main () {
     lastTime = currentTime;
 
     // NOTE IMGUI asserts that deltaTime > 0.f, hence this check.
-    Float32 imguiDeltaTime[2] {1.f / 60.f, deltaTime};
+    Float32 imguiDeltaTime[2] {defaultDelta, deltaTime};
     ImGui::GetIO().DeltaTime = imguiDeltaTime[deltaTime > 0.f];
 
     while ((event = xcb_poll_for_event (window.connection))) {
@@ -446,35 +905,21 @@ int main () {
 
     frameIndex %= FRAMES_COUNT;
     const auto currentFrame = &frames[frameIndex];
+    auto offscreenCmd = currentFrame->offscreenCmd;
+    auto compositionCmd = currentFrame->compositionCmd;
 
-    VK_CHECK (vkWaitForFences (device, 1, &currentFrame->renderFence, VK_TRUE, ~0ull));
-    VK_CHECK (vkResetFences (device, 1, &currentFrame->renderFence));
+    VkFence fences[2] {currentFrame->renderFence, currentFrame->offscreenFence};
+
+    VK_CHECK (vkWaitForFences (device, 2, fences, VK_TRUE, ~0ull));
+    VK_CHECK (vkResetFences (device, 2, fences));
 
     Uint32 imageIndex = 0;
-    VK_CHECK (vkAcquireNextImageKHR (
-      device,
-      swapchain.handle,
-      ~0ull,
-      currentFrame->presentSemaphore,
-      VK_NULL_HANDLE,
-      &imageIndex
-    ));
+    VKC_GET_NEXT_IMAGE (device, swapchain, currentFrame->presentSemaphore, &imageIndex);
 
-    VK_CHECK (vkBeginCommandBuffer (currentFrame->commandBuffer, &cmdBeginInfo));
-
-    { // Begin render pass
-      VkRenderPassBeginInfo beginInfo;
-      beginInfo.pNext = nullptr;
-      beginInfo.renderPass = renderPass;
-      beginInfo.renderArea.offset = {0, 0};
-      beginInfo.pClearValues = clearValues;
-      beginInfo.sType = RENDER_PASS_BEGIN_INFO;
-      beginInfo.renderArea.extent = swapchain.extent;
-      beginInfo.framebuffer = framebuffers[imageIndex];
-      beginInfo.clearValueCount = ARRAY_SIZE (clearValues);
-
-      vkCmdBeginRenderPass (currentFrame->commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-    }
+    // Geometry pass of deferred renderer
+    VK_CHECK (vkBeginCommandBuffer (offscreenCmd, &cmdBeginInfo));
+    vkCmdBeginRenderPass (offscreenCmd, &offscreenBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline (offscreenCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer.geometryPass.pipeline);
 
     {
       rei::math::Matrix4 viewMatrix;
@@ -482,18 +927,11 @@ int main () {
       rei::math::lookAt (&camera.position, &center, &camera.up, &viewMatrix);
 
       rei::math::Matrix4 viewProjection = camera.projection * viewMatrix;
-      sponza.draw (currentFrame->commandBuffer, &viewProjection);
-
-      imguiContext.newFrame ();
-      rei::imgui::showDebugWindow (&camera.speed, allocator);
-      ImGui::Render ();
-      const ImDrawData* drawData = ImGui::GetDrawData ();
-      imguiContext.updateBuffers (frameIndex, drawData);
-      imguiContext.renderDrawData (currentFrame->commandBuffer, frameIndex, drawData);
+      sponza.draw (offscreenCmd, gbuffer.geometryPass.pipelineLayout, &viewProjection);
     }
 
-    vkCmdEndRenderPass (currentFrame->commandBuffer);
-    VK_CHECK (vkEndCommandBuffer (currentFrame->commandBuffer));
+    vkCmdEndRenderPass (offscreenCmd);
+    VK_CHECK (vkEndCommandBuffer (offscreenCmd));
 
     { // Submit written commands to a queue
       VkSubmitInfo submitInfo;
@@ -502,9 +940,48 @@ int main () {
       submitInfo.commandBufferCount = 1;
       submitInfo.waitSemaphoreCount = 1;
       submitInfo.signalSemaphoreCount = 1;
+      submitInfo.pCommandBuffers = &offscreenCmd;
       submitInfo.pWaitDstStageMask = &pipelineWaitStage;
-      submitInfo.pCommandBuffers = &currentFrame->commandBuffer;
       submitInfo.pWaitSemaphores = &currentFrame->presentSemaphore;
+      submitInfo.pSignalSemaphores = &currentFrame->offscreenSemaphore;
+
+      VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->offscreenFence));
+    }
+
+    VK_CHECK (vkBeginCommandBuffer (compositionCmd, &cmdBeginInfo));
+
+    imguiContext.newFrame ();
+    rei::imgui::showDebugWindow (&camera.speed, allocator);
+    ImGui::Render ();
+    const ImDrawData* drawData = ImGui::GetDrawData ();
+    imguiContext.updateBuffers (frameIndex, drawData);
+
+    // Light pass of deferred renderer
+    for (Uint32 index = 0; index < swapchain.imagesCount; ++index) {
+      compositionBeginInfo.framebuffer = framebuffers[index];
+      vkCmdBeginRenderPass (compositionCmd, &compositionBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+      vkCmdBindPipeline (compositionCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer.lightPass.pipeline);
+      VKC_BIND_DESCRIPTORS (compositionCmd, gbuffer.lightPass.pipelineLayout, 1, &gbuffer.lightPass.descriptorSet);
+
+      vkCmdDraw (compositionCmd, 3, 1, 0, 0);
+      imguiContext.renderDrawData (compositionCmd, frameIndex, drawData);
+
+      vkCmdEndRenderPass (compositionCmd);
+    }
+
+    VK_CHECK (vkEndCommandBuffer (compositionCmd));
+
+    { // Submit written commands to a queue
+      VkSubmitInfo submitInfo;
+      submitInfo.pNext = nullptr;
+      submitInfo.sType = SUBMIT_INFO;
+      submitInfo.commandBufferCount = 1;
+      submitInfo.waitSemaphoreCount = 1;
+      submitInfo.signalSemaphoreCount = 1;
+      submitInfo.pCommandBuffers = &compositionCmd;
+      submitInfo.pWaitDstStageMask = &pipelineWaitStage;
+      submitInfo.pWaitSemaphores = &currentFrame->offscreenSemaphore;
       submitInfo.pSignalSemaphores = &currentFrame->renderSemaphore;
 
       VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->renderFence));
@@ -530,6 +1007,7 @@ int main () {
 
   rei::gltf::destroy (device, allocator, &sponza);
   rei::imgui::destroy (device, &imguiContext);
+  destroyGBuffer (device, allocator, &gbuffer);
 
   { // Save pipeline cache for future reuse
     size_t size = 0;
@@ -553,8 +1031,10 @@ int main () {
 
   for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
     auto current = &frames[index];
+    vkDestroySemaphore (device, current->offscreenSemaphore, nullptr);
     vkDestroySemaphore (device, current->presentSemaphore, nullptr);
     vkDestroySemaphore (device, current->renderSemaphore, nullptr);
+    vkDestroyFence (device, current->offscreenFence, nullptr);
     vkDestroyFence (device, current->renderFence, nullptr);
     vkDestroyCommandPool (device, current->commandPool, nullptr);
   }
@@ -564,8 +1044,7 @@ int main () {
 
   free (framebuffers);
 
-  vkDestroyRenderPass (device, renderPass, nullptr);
-
+  vkDestroyRenderPass (device, defaultRenderPass, nullptr);
   rei::vku::destroySwapchain (device, allocator, &swapchain);
 
   vmaDestroyAllocator (allocator);

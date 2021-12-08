@@ -45,10 +45,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback (
   (void) userData;
 
   if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-    LOGS_ERROR (callbackData->pMessage);
+    LOG_ERROR ("%s\n", callbackData->pMessage);
 
   if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-    LOGS_WARNING (callbackData->pMessage);
+    LOG_WARNING ("%s\n", callbackData->pMessage);
 
   return VK_FALSE;
 }

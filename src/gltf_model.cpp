@@ -431,6 +431,7 @@ void Model::initPipelines (
   createInfo.cache = pipelineCache;
   createInfo.layout = pipelineLayout;
   createInfo.renderPass = renderPass;
+  createInfo.colorBlendAttachmentCount = 1;
   createInfo.pixelShaderPath = "assets/shaders/mesh.frag.spv";
   createInfo.vertexShaderPath = "assets/shaders/mesh.vert.spv";
 
@@ -444,28 +445,21 @@ void Model::initPipelines (
   vku::createGraphicsPipeline (device, &createInfo, &pipeline);
 }
 
-void Model::draw (VkCommandBuffer commandBuffer, const math::Matrix4* viewProjection) {
-  vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+void Model::draw (VkCommandBuffer commandBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection) {
+  //vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
   VkDeviceSize offset = 0;
   vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffer.handle, &offset);
   vkCmdBindIndexBuffer (commandBuffer, indexBuffer.handle, 0, VK_INDEX_TYPE_UINT32);
 
-  math::Matrix4 mvp = *viewProjection * modelMatrix;
-  vkCmdPushConstants (commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Matrix4), &mvp);
+  //math::Matrix4 mvp = *viewProjection * modelMatrix;
+  math::Matrix4 matrices[2] {*viewProjection * modelMatrix, modelMatrix};
+  vkCmdPushConstants (commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Matrix4) * 2, matrices);
 
   for (size_t index = 0; index < materialsCount; ++index) {
     const auto current = &batches[index];
 
-    vkCmdBindDescriptorSets (
-      commandBuffer,
-      VK_PIPELINE_BIND_POINT_GRAPHICS,
-      pipelineLayout,
-      0,
-      1, &materials[current->materialIndex].descriptorSet,
-      0, nullptr
-    );
-
+    VKC_BIND_DESCRIPTORS (commandBuffer, layout, 1, &materials[current->materialIndex].descriptorSet);
     vkCmdDrawIndexed (commandBuffer, current->indexCount, 1, current->firstIndex, 0, 0);
   }
 }

@@ -57,9 +57,11 @@ struct Swapchain {
   Image depthImage;
 };
 
-struct Shaders {
-  VkShaderModule vertex, pixel;
-  VkPipelineShaderStageCreateInfo stages[2];
+struct RenderPassCreateInfo {
+  uint32_t subpassCount;
+  uint32_t attachmentCount;
+  VkSubpassDescription* subpasses;
+  VkAttachmentDescription* attachments;
 };
 
 struct GraphicsPipelineCreateInfo {
@@ -69,6 +71,8 @@ struct GraphicsPipelineCreateInfo {
 
   const char* pixelShaderPath;
   const char* vertexShaderPath;
+
+  size_t colorBlendAttachmentCount;
 
   VkPipelineDynamicStateCreateInfo* dynamicState;
   VkPipelineViewportStateCreateInfo* viewportState;

@@ -49,7 +49,7 @@ struct Model {
     const vku::Swapchain* swapchain
   );
 
-  void draw (VkCommandBuffer commandBuffer, const math::Matrix4* viewProjection);
+  void draw (VkCommandBuffer commandBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection);
 };
 
 void load (

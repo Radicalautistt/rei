@@ -123,7 +123,6 @@ void createAttachment (
     info.tiling = VK_IMAGE_TILING_OPTIMAL;
 
     info.usage = createInfo->usage;
-    //info.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
     info.extent.depth = 1;
     info.extent.width = createInfo->width;
@@ -315,8 +314,8 @@ void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* 
   multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
   VkPipelineColorBlendStateCreateInfo colorBlendState {PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-  colorBlendState.attachmentCount = 1;
   colorBlendState.pAttachments = createInfo->colorBlendAttachment;
+  colorBlendState.attachmentCount = (Uint32) createInfo->colorBlendAttachmentCount;
 
   VkShaderModule vertexShader, pixelShader;
   createShaderModule (device, createInfo->vertexShaderPath, &vertexShader);

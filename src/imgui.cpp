@@ -100,15 +100,7 @@ void Context::handleEvents (const xcb_generic_event_t* event) {
 }
 
 void Context::renderDrawData (VkCommandBuffer commandBuffer, Uint32 frameIndex, const ImDrawData* drawData) {
-  vkCmdBindDescriptorSets (
-    commandBuffer,
-    VK_PIPELINE_BIND_POINT_GRAPHICS,
-    pipelineLayout,
-    0,
-    1, &descriptorSet,
-    0, nullptr
-  );
-
+  VKC_BIND_DESCRIPTORS (commandBuffer, pipelineLayout, 1, &descriptorSet);
   vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
   {
@@ -460,6 +452,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 
     vku::GraphicsPipelineCreateInfo info;
+    info.colorBlendAttachmentCount = 1;
     info.layout = output->pipelineLayout;
     info.cache = createInfo->pipelineCache;
     info.renderPass = createInfo->renderPass;

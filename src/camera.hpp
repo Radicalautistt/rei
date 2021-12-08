@@ -16,9 +16,10 @@ struct Camera {
 
   Bool32 firstMouse;
   Float32 zoom, speed, sensitivity;
-  Float32 zFar, yaw, pitch, lastX, lastY;
+  math::Vector3 up;
+  Float32 yaw, pitch, lastX, lastY;
 
-  math::Vector3 up, front, right, worldUp, position;
+  math::Vector3 front, right, worldUp, position;
   math::Matrix4 projection;
 
   void update () noexcept;

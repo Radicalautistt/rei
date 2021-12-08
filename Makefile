@@ -5,7 +5,7 @@ linkPaths = -L third-party/lz4/lib/
 linkPaths += -L third-party/imgui/
 links = -ldl -lm -lxcb -llz4 -lIMGUI
 
-flags = -std=c++17 -Wall -Wextra -Wpadded -Wconversion -Og -march=native -Wno-missing-field-initializers -g
+flags = -std=c++14 -Wall -Wextra -Wpadded -Wconversion -Og -march=native -Wno-missing-field-initializers -g
 sourceFiles = $(call rwildcard, src, *.cpp, *.hpp, *.h)
 objectFiles = $(patsubst src/%.cpp, obj/%.o, $(sourceFiles))
 

@@ -45,6 +45,23 @@
 #  endif
 #endif
 
+#ifndef VKC_GET_NEXT_IMAGE
+#  define VKC_GET_NEXT_IMAGE(device, swapchain, semaphore, out) \
+    VK_CHECK (vkAcquireNextImageKHR (                           \
+      device,                                                   \
+      swapchain.handle,                                         \
+      ~0ull,                                                    \
+      currentFrame->presentSemaphore,                           \
+      VK_NULL_HANDLE,                                           \
+      &imageIndex                                               \
+    ))
+#endif
+
+#ifndef VKC_BIND_DESCRIPTORS
+#  define VKC_BIND_DESCRIPTORS(cmdBuffer, layout, count, descriptors) \
+     vkCmdBindDescriptorSets (cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, count, descriptors, 0, nullptr)
+#endif
+
 namespace rei::vkc {
 
 constexpr const char* requiredDeviceExtensions[] {
