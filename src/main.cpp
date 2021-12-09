@@ -27,6 +27,13 @@ struct Frame {
   VkSemaphore offscreenSemaphore;
 };
 
+struct Light {
+  rei::math::Vector4 position;
+  // x, y, z = color, w = radius
+  // This is done to remove padding L.o.L
+  rei::math::Vector4 colorRadius;
+};
+
 struct GBufferCreateInfo {
   Uint32 width, height;
   VkPipelineCache pipelineCache;
@@ -59,6 +66,17 @@ struct GBuffer {
     VkRenderPass renderPass;
     VkClearValue clearValues[2];
   } lightPass;
+};
+
+struct LightPassPushConstants {
+  Light light;
+  // Which target to present
+  // 0 - default
+  // 1 - albedo
+  // 2 - normal
+  // 3 - position
+  Uint32 target;
+  rei::math::Vector4 viewPosition;
 };
 
 static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBufferCreateInfo* createInfo, GBuffer* out) {
@@ -278,9 +296,9 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
 
     VK_CHECK (vkCreatePipelineLayout (device, &info, nullptr, &out->geometryPass.pipelineLayout));
 
-    info.pushConstantRangeCount = 0;
-    info.pPushConstantRanges = nullptr;
     info.pSetLayouts = &out->lightPass.descriptorLayout;
+    pushConstant.size = sizeof (LightPassPushConstants);
+    pushConstant.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VK_CHECK (vkCreatePipelineLayout (device, &info, nullptr, &out->lightPass.pipelineLayout));
   }
@@ -864,6 +882,24 @@ int main () {
   compositionBeginInfo.pClearValues = gbuffer.lightPass.clearValues;
   compositionBeginInfo.clearValueCount = ARRAY_SIZE (gbuffer.lightPass.clearValues);
 
+  LightPassPushConstants lightPushConstants;
+  lightPushConstants.target = 0;
+
+  lightPushConstants.viewPosition.x = 0.f;
+  lightPushConstants.viewPosition.y = 0.f;
+  lightPushConstants.viewPosition.z = 0.f;
+  lightPushConstants.viewPosition.w = 1.f;
+
+  lightPushConstants.light.position.x = 0.f;
+  lightPushConstants.light.position.y = 0.f;
+  lightPushConstants.light.position.z = 0.5f;
+  lightPushConstants.light.position.w = 0.f;
+
+  lightPushConstants.light.colorRadius.x = 1.f;
+  lightPushConstants.light.colorRadius.y = 31.f / 255.f;
+  lightPushConstants.light.colorRadius.z = 31.f / 255.f;
+  lightPushConstants.light.colorRadius.w = 0.5f;
+
   VkPipelineStageFlags pipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
   while (running) {
@@ -964,6 +1000,16 @@ int main () {
       vkCmdBeginRenderPass (compositionCmd, &compositionBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
       vkCmdBindPipeline (compositionCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer.lightPass.pipeline);
+
+      vkCmdPushConstants (
+        compositionCmd,
+	gbuffer.lightPass.pipelineLayout,
+	VK_SHADER_STAGE_FRAGMENT_BIT,
+	0,
+	sizeof (LightPassPushConstants),
+	&lightPushConstants
+      );
+
       VKC_BIND_DESCRIPTORS (compositionCmd, gbuffer.lightPass.pipelineLayout, 1, &gbuffer.lightPass.descriptorSet);
 
       vkCmdDraw (compositionCmd, 3, 1, 0, 0);

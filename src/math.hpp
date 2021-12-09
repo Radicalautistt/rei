@@ -132,6 +132,10 @@ struct Vector4 {
     _mm_store_ps (&out->x, _mm_add_ps (a->load (), b->load ()));
   }
 
+  static inline void mul (const Vector4* a, const Vector4* b, Vector4* out) {
+    _mm_store_ps (&out->x, _mm_mul_ps (a->load (), b->load ()));
+  }
+
   static inline void mulScalar (const Vector4* vector, Float32 scalar, Vector4* out) {
     _mm_store_ps (&out->x, _mm_mul_ps (_mm_set1_ps (scalar), vector->load ()));
   }
