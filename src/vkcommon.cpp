@@ -1,6 +1,53 @@
+#include <dlfcn.h>
+
 #include "vkcommon.hpp"
 
+PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = nullptr;
+
+// Zero initialize function pointers
+#define X(name) PFN_##name name = nullptr;
+  VK_GLOBAL_FUNCTIONS
+  VK_INSTANCE_FUNCTIONS
+  VK_DEVICE_FUNCTIONS
+#undef X
+
 namespace rei::vkc {
+
+void* Context::library = nullptr;
+
+void Context::init () {
+  LOGS_INFO ("Loading Vulkan functions from " ANSI_YELLOW "libvulkan.so.1");
+  library = dlopen ("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+  if (!library) {
+    LOGS_WARNING ("Failed, going with " ANSI_RED "libvulkan.so" ANSI_YELLOW " instead");
+    library = dlopen ("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+  }
+
+  REI_ASSERT (library);
+
+  vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) dlsym (library, "vkGetInstanceProcAddr");
+
+  // Load global functions
+  #define X(name) name = (PFN_##name) vkGetInstanceProcAddr (nullptr, #name);
+    VK_GLOBAL_FUNCTIONS
+  #undef X
+}
+
+void Context::shutdown () {
+  dlclose (library);
+}
+
+void Context::loadInstance (VkInstance instance) {
+  #define X(name) name = (PFN_##name) vkGetInstanceProcAddr (instance, #name);
+    VK_INSTANCE_FUNCTIONS
+  #undef X
+}
+
+void Context::loadDevice (VkDevice device) {
+  #define X(name) name = (PFN_##name) vkGetDeviceProcAddr (device, #name);
+    VK_DEVICE_FUNCTIONS
+  #undef X
+}
 
 const char* getError (VkResult error) noexcept {
   #define GET_ERROR(name) case VK_##name: return #name

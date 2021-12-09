@@ -1,6 +1,5 @@
 #include <stdio.h>
 
-#include "utils.hpp"
 #include "imgui.hpp"
 #include "common.hpp"
 #include "camera.hpp"
@@ -503,8 +502,8 @@ int main () {
 
   rei::gltf::Model sponza;
 
-  rei::utils::Timer::init ();
-  rei::VulkanContext::init ();
+  rei::Timer::init ();
+  rei::vkc::Context::init ();
 
   { // Create window
     rei::xcb::WindowCreateInfo createInfo;
@@ -566,7 +565,7 @@ int main () {
     #endif
 
     VK_CHECK (vkCreateInstance (&createInfo, nullptr, &instance));
-    rei::VulkanContext::loadInstance (instance);
+    rei::vkc::Context::loadInstance (instance);
   }
 
   #ifndef NDEBUG
@@ -636,7 +635,7 @@ int main () {
 
     VK_CHECK (vkCreateDevice (physicalDevice, &createInfo, nullptr, &device));
 
-    rei::VulkanContext::loadDevice (device);
+    rei::vkc::Context::loadDevice (device);
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &presentQueue);
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &computeQueue);
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &graphicsQueue);
@@ -806,8 +805,8 @@ int main () {
 
   { // Create/load pipeline cache
     VkPipelineCacheCreateInfo createInfo {PIPELINE_CACHE_CREATE_INFO};
-    rei::utils::File cacheFile;
-    auto result = rei::utils::readFile ("pipeline.cache", True, &cacheFile);
+    rei::File cacheFile;
+    auto result = rei::readFile ("pipeline.cache", True, &cacheFile);
 
     switch (result) {
       case rei::Result::Success: {
@@ -904,7 +903,7 @@ int main () {
 
   while (running) {
     camera.firstMouse = True;
-    Float32 currentTime = rei::utils::Timer::getCurrentTime ();
+    Float32 currentTime = rei::Timer::getCurrentTime ();
     deltaTime = currentTime - lastTime;
     lastTime = currentTime;
 
@@ -1105,5 +1104,5 @@ int main () {
 
   vkDestroyInstance (instance, nullptr);
   rei::xcb::destroyWindow (&window);
-  rei::VulkanContext::shutdown ();
+  rei::vkc::Context::shutdown ();
 }

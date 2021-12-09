@@ -3,7 +3,7 @@
 
 #include <immintrin.h>
 
-#include "common.hpp"
+#include "rei_types.hpp"
 
 #ifndef PI
 #  define PI 3.14159265359f

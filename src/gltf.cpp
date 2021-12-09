@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #include "gltf.hpp"
-#include "utils.hpp"
+#include "common.hpp"
 
 #include <rapidjson/document.h>
 
@@ -79,8 +79,8 @@ void load (const char* relativePath, Data* output) {
     char* extension = strrchr (binaryPath, '.');
     memcpy (extension + 1, "bin", 4);
 
-    utils::File binaryFile;
-    REI_CHECK (utils::readFile (binaryPath, True, &binaryFile));
+    File binaryFile;
+    REI_CHECK (readFile (binaryPath, True, &binaryFile));
 
     output->buffer = MALLOC (Uint8, binaryFile.size);
     memcpy (output->buffer, (Uint8*) binaryFile.contents, binaryFile.size);
@@ -88,8 +88,8 @@ void load (const char* relativePath, Data* output) {
     free (binaryFile.contents);
   }
 
-  utils::File gltf;
-  REI_CHECK (utils::readFile (relativePath, False, &gltf));
+  File gltf;
+  REI_CHECK (readFile (relativePath, False, &gltf));
 
   rapidjson::Document parsedGLTF;
   parsedGLTF.Parse ((const char*) gltf.contents);

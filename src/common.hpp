@@ -5,30 +5,9 @@
 #include <stdlib.h>
 #include <x86intrin.h>
 
-typedef unsigned char Uint8;
-typedef unsigned short int Uint16;
-typedef unsigned int Uint32;
-typedef unsigned long int Uint64;
+#include "rei_types.hpp"
 
-typedef signed char Int8;
-typedef signed short int Int16;
-typedef signed int Int32;
-typedef signed long int Int64;
-
-typedef float Float32;
-typedef double Float64;
-
-typedef Uint8 Bool;
-typedef Uint32 Bool32;
-
-#ifndef True
-#  define True 1u
-#endif
-
-#ifndef False
-#  define False 0u
-#endif
-
+// List of ANSI color to use with the logger
 #ifndef ANSI_RESET
 #  define ANSI_RESET "\033[;0m"
 #endif
@@ -92,6 +71,7 @@ typedef Uint32 Bool32;
 #  define LOGS_WARNING(string) LOG_WARNING ("%s", string)
 #endif
 
+// General-purpose macros
 #ifndef SWAP
 #  define SWAP(a, b) do { \
      auto temp = *a;      \
@@ -118,6 +98,10 @@ typedef Uint32 Bool32;
 
 #ifndef MALLOC
 #  define MALLOC(Type, count) (Type*) malloc (sizeof (Type) * count)
+#endif
+
+#ifndef CLAMP
+#  define CLAMP(value, min, max) (((value) > (max)) ? (max) : (((value) < (min)) ? (min) : (value)))
 #endif
 
 #ifdef NDEBUG
@@ -199,9 +183,22 @@ struct Vertex {
   Float32 u, v;
 };
 
+struct File {
+  size_t size;
+  void* contents;
+};
+
+struct Timer {
+  static timeval start;
+
+  static void init () noexcept;
+  [[nodiscard]] static Float32 getCurrentTime () noexcept;
+};
+
 void logger (LogLevel level, const char* format, ...);
 
 [[nodiscard]] const char* getError (Result result) noexcept;
+Result readFile (const char* relativePath, Bool binary, File* output);
 
 };
 

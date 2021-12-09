@@ -1,7 +1,6 @@
 #ifndef VKUTILS_HPP
 #define VKUTILS_HPP
 
-#include "common.hpp"
 #include "vkcommon.hpp"
 
 // Forward declarations

@@ -4,7 +4,6 @@
 #include <stddef.h>
 
 #include "math.hpp"
-#include "common.hpp"
 
 namespace rei::assets::gltf {
 

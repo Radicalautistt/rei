@@ -1,7 +1,6 @@
 #include <math.h>
 #include <string.h>
 
-#include "utils.hpp"
 #include "window.hpp"
 #include "vkutils.hpp"
 
@@ -293,8 +292,8 @@ void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain* swapc
 }
 
 void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule* output) {
-  utils::File shaderFile;
-  REI_CHECK (utils::readFile (relativePath, True, &shaderFile));
+  File shaderFile;
+  REI_CHECK (readFile (relativePath, True, &shaderFile));
 
   VkShaderModuleCreateInfo createInfo {SHADER_MODULE_CREATE_INFO};
   createInfo.codeSize = shaderFile.size;

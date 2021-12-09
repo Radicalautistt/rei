@@ -2,7 +2,7 @@
 #define CAMERA_HPP
 
 #include "math.hpp"
-#include "common.hpp"
+#include "rei_types.hpp"
 
 namespace rei {
 

@@ -2,7 +2,6 @@
 #define GLTF_MODEL_HPP
 
 #include "math.hpp"
-#include "common.hpp"
 #include "vkutils.hpp"
 
 namespace rei::gltf {

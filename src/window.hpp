@@ -1,7 +1,7 @@
 #ifndef WINDOW_HPP
 #define WINDOW_HPP
 
-#include "common.hpp"
+#include "rei_types.hpp"
 
 struct xcb_screen_t;
 struct xcb_connection_t;

@@ -1,7 +1,6 @@
 #ifndef IMGUI_HPP
 #define IMGUI_HPP
 
-#include "common.hpp"
 #include "vkutils.hpp"
 
 struct ImDrawData;
