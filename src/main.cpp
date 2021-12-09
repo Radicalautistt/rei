@@ -989,7 +989,7 @@ int main () {
     VK_CHECK (vkBeginCommandBuffer (compositionCmd, &cmdBeginInfo));
 
     imguiContext.newFrame ();
-    rei::imgui::showDebugWindow (&camera.speed, allocator);
+    rei::imgui::showDebugWindow (&camera.speed, &lightPushConstants.target, allocator);
     ImGui::Render ();
     const ImDrawData* drawData = ImGui::GetDrawData ();
     imguiContext.updateBuffers (frameIndex, drawData);

@@ -517,11 +517,11 @@ void destroy (VkDevice device, Context* context) {
   ImGui::DestroyContext (context->handle);
 }
 
-void showDebugWindow (Float32* cameraSpeed, VmaAllocator allocator) {
+void showDebugWindow (Float32* cameraSpeed, Uint32* gbufferOutput, VmaAllocator allocator) {
   const ImGuiIO& io = ImGui::GetIO ();
   ImGui::Begin ("REI Debug window");
   ImGui::SetWindowPos ({0.f, 0.f});
-  ImGui::SetWindowSize ({320, 250});
+  ImGui::SetWindowSize ({320, 270});
 
   static size_t usedBytes;
   static size_t freeBytes;
@@ -562,6 +562,15 @@ void showDebugWindow (Float32* cameraSpeed, VmaAllocator allocator) {
   if (ImGui::Button ("-")) *cameraSpeed -= 20.f;
   ImGui::SameLine ();
   if (ImGui::Button ("+")) *cameraSpeed += 20.f;
+
+  ImGui::Text ("View gbuffer contents:");
+  if (ImGui::Button ("All")) *gbufferOutput = 0;
+  ImGui::SameLine ();
+  if (ImGui::Button ("Albedo")) *gbufferOutput = 1;
+  ImGui::SameLine ();
+  if (ImGui::Button ("Normal")) *gbufferOutput = 2;
+  ImGui::SameLine ();
+  if (ImGui::Button ("Position")) *gbufferOutput = 3;
 
   ImGui::End ();
 }

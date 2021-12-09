@@ -60,7 +60,7 @@ struct Context {
 void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* createInfo, Context* output);
 void destroy (VkDevice device, Context* context);
 
-void showDebugWindow (Float32* cameraSpeed, VmaAllocator allocator);
+void showDebugWindow (Float32* cameraSpeed, Uint32* gbufferOutput, VmaAllocator allocator);
 
 };
 

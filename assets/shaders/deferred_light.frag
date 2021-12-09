@@ -24,6 +24,14 @@ void main () {
   vec3 normalAttachment = texture (normal, uv).rgb;
   vec3 positionAttachment = texture (position, uv).rgb;
 
+  if (pushConstants.target > 0) {
+    switch (pushConstants.target) {
+      case 1: pixelColor = albedoAttachment; return;
+      case 2: pixelColor = vec4 (normalAttachment, 1.f); return;
+      case 3: pixelColor = vec4 (positionAttachment, 1.f); return;
+    }
+  }
+
   vec3 color = albedoAttachment.rgb * 0.05f;
 
   vec3 L = pushConstants.light.position.xyz - positionAttachment;
