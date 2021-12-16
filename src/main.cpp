@@ -311,18 +311,18 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     VkVertexInputAttributeDescription attributes[3];
     attributes[0].location = 0;
     attributes[0].binding = binding.binding;
-    attributes[0].offset = offsetof (rei::Vertex, x);
+    attributes[0].offset = REI_OFFSET_OF (rei::Vertex, x);
     attributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 
     attributes[1].location = 1;
     attributes[1].binding = binding.binding;
-    attributes[1].offset = offsetof (rei::Vertex, nx);
+    attributes[1].offset = REI_OFFSET_OF (rei::Vertex, nx);
     attributes[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 
     attributes[2].location = 2;
     attributes[2].binding = binding.binding;
     attributes[2].format = VK_FORMAT_R32G32_SFLOAT;
-    attributes[2].offset = offsetof (rei::Vertex, u);
+    attributes[2].offset = REI_OFFSET_OF (rei::Vertex, u);
 
     VkPipelineVertexInputStateCreateInfo vertexInputState;
     vertexInputState.pNext = nullptr;
@@ -849,7 +849,6 @@ int main () {
   rei::gltf::load (device, allocator, &transferContext, "assets/models/sponza-scene/Sponza.gltf", &sponza);
   sponza.initDescriptors (device, gbuffer.geometryPass.descriptorLayout);
 
-  Bool32 running = True;
   Float32 lastTime = 0.f;
   Float32 deltaTime = 0.f;
   const Float32 defaultDelta = 1.f / 60.f;
@@ -901,7 +900,7 @@ int main () {
 
   VkPipelineStageFlags pipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-  while (running) {
+  for (;;) {
     camera.firstMouse = True;
     Float32 currentTime = rei::Timer::getCurrentTime ();
     deltaTime = currentTime - lastTime;
@@ -916,7 +915,7 @@ int main () {
         case XCB_KEY_PRESS: {
           const auto key = (const xcb_key_press_event_t*) event;
           switch (key->detail) {
-            case KEY_ESCAPE: running = False; break;
+            case KEY_ESCAPE: goto RESOURCE_CLEANUP;
             case KEY_A: camera.move (rei::Camera::Direction::Left, deltaTime); break;
             case KEY_D: camera.move (rei::Camera::Direction::Right, deltaTime); break;
             case KEY_W: camera.move (rei::Camera::Direction::Forward, deltaTime); break;
@@ -987,36 +986,32 @@ int main () {
 
     VK_CHECK (vkBeginCommandBuffer (compositionCmd, &cmdBeginInfo));
 
+    // Light pass of deferred renderer
+    compositionBeginInfo.framebuffer = framebuffers[imageIndex];
+    vkCmdBeginRenderPass (compositionCmd, &compositionBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline (compositionCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer.lightPass.pipeline);
+
+    vkCmdPushConstants (
+      compositionCmd,
+      gbuffer.lightPass.pipelineLayout,
+      VK_SHADER_STAGE_FRAGMENT_BIT,
+      0,
+      sizeof (LightPassPushConstants),
+      &lightPushConstants
+    );
+
+    VKC_BIND_DESCRIPTORS (compositionCmd, gbuffer.lightPass.pipelineLayout, 1, &gbuffer.lightPass.descriptorSet);
+    vkCmdDraw (compositionCmd, 3, 1, 0, 0);
+
     imguiContext.newFrame ();
     rei::imgui::showDebugWindow (&camera.speed, &lightPushConstants.target, allocator);
     ImGui::Render ();
     const ImDrawData* drawData = ImGui::GetDrawData ();
     imguiContext.updateBuffers (frameIndex, drawData);
 
-    // Light pass of deferred renderer
-    for (Uint32 index = 0; index < swapchain.imagesCount; ++index) {
-      compositionBeginInfo.framebuffer = framebuffers[index];
-      vkCmdBeginRenderPass (compositionCmd, &compositionBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    imguiContext.renderDrawData (compositionCmd, frameIndex, drawData);
 
-      vkCmdBindPipeline (compositionCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer.lightPass.pipeline);
-
-      vkCmdPushConstants (
-        compositionCmd,
-	gbuffer.lightPass.pipelineLayout,
-	VK_SHADER_STAGE_FRAGMENT_BIT,
-	0,
-	sizeof (LightPassPushConstants),
-	&lightPushConstants
-      );
-
-      VKC_BIND_DESCRIPTORS (compositionCmd, gbuffer.lightPass.pipelineLayout, 1, &gbuffer.lightPass.descriptorSet);
-
-      vkCmdDraw (compositionCmd, 3, 1, 0, 0);
-      imguiContext.renderDrawData (compositionCmd, frameIndex, drawData);
-
-      vkCmdEndRenderPass (compositionCmd);
-    }
-
+    vkCmdEndRenderPass (compositionCmd);
     VK_CHECK (vkEndCommandBuffer (compositionCmd));
 
     { // Submit written commands to a queue
@@ -1048,6 +1043,8 @@ int main () {
     VK_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
     ++frameIndex;
   }
+
+RESOURCE_CLEANUP:
 
   // Wait for gpu to finish rendering of the last frame
   vkDeviceWaitIdle (device);

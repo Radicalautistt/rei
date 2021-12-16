@@ -389,9 +389,16 @@ void submitImmediateCommand (VkDevice device, const TransferContext* transferCon
 }
 
 void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo* allocationInfo, Buffer* output) {
-  VkBufferCreateInfo createInfo {BUFFER_CREATE_INFO};
+  VkBufferCreateInfo createInfo;
+  createInfo.sType = BUFFER_CREATE_INFO;
   createInfo.size = allocationInfo->size;
   createInfo.usage = allocationInfo->bufferUsage;
+
+  createInfo.pNext = nullptr;
+  createInfo.flags = VULKAN_NO_FLAGS;
+  createInfo.queueFamilyIndexCount = 0;
+  createInfo.pQueueFamilyIndices = nullptr;
+  createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
   output->size = allocationInfo->size;
 

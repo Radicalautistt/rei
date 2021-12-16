@@ -9,11 +9,10 @@ layout (location = 1) out vec4 outColor;
 
 layout (push_constant) uniform PushConstants {
   vec2 scale;
-  vec2 translate;
 } pushConstants;
 
 void main () {
   outUv = uv;
   outColor = color;
-  gl_Position = vec4 (position * pushConstants.scale + pushConstants.translate, 0.f, 1.f);
+  gl_Position = vec4 (position * pushConstants.scale + vec2 (-1.f), 0.f, 1.f);
 }

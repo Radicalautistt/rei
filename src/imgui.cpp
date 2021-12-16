@@ -7,24 +7,20 @@
 
 namespace rei::imgui {
 
-static Bool32 mouseButtonsDown[2];
-
 void Context::updateBuffers (Uint32 frameIndex, const ImDrawData* drawData) {
-  counts.index = drawData->TotalIdxCount;
-  counts.vertex = drawData->TotalVtxCount;
-
-  VkDeviceSize indexBufferSize = sizeof (ImDrawIdx) * counts.index;
-  VkDeviceSize vertexBufferSize = sizeof (ImDrawVert) * counts.vertex;
-
+  auto indexBuffer = &indexBuffers[frameIndex];
   auto vertexBuffer = &vertexBuffers[frameIndex];
+
+  VkDeviceSize indexBufferSize = sizeof (ImDrawIdx) * (size_t) drawData->TotalIdxCount;
+  VkDeviceSize vertexBufferSize = sizeof (ImDrawVert) * (size_t) drawData->TotalVtxCount;
 
   if (vertexBuffer->size < vertexBufferSize) {
     vmaUnmapMemory (allocator, vertexBuffer->allocation);
     vmaDestroyBuffer (allocator, vertexBuffer->handle, vertexBuffer->allocation);
 
     vku::BufferAllocationInfo allocationInfo;
+    allocationInfo.size = vertexBufferSize;
     allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-    allocationInfo.size = sizeof (ImDrawVert) * counts.vertex;
     allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     allocationInfo.bufferUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
@@ -32,21 +28,13 @@ void Context::updateBuffers (Uint32 frameIndex, const ImDrawData* drawData) {
 
     vku::allocateBuffer (allocator, &allocationInfo, vertexBuffer);
     VK_CHECK (vmaMapMemory (allocator, vertexBuffer->allocation, &vertexBuffer->mapped));
-  }
 
-  auto indexBuffer = &indexBuffers[frameIndex];
-
-  if (indexBuffer->size < indexBufferSize) {
     vmaUnmapMemory (allocator, indexBuffer->allocation);
     vmaDestroyBuffer (allocator, indexBuffer->handle, indexBuffer->allocation);
 
-    vku::BufferAllocationInfo allocationInfo;
-    allocationInfo.size = sizeof (ImDrawIdx) * counts.index;
-    allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    allocationInfo.size = indexBufferSize;
     allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
     vku::allocateBuffer (allocator, &allocationInfo, indexBuffer);
     VK_CHECK (vmaMapMemory (allocator, indexBuffer->allocation, &indexBuffer->mapped));
@@ -58,8 +46,8 @@ void Context::updateBuffers (Uint32 frameIndex, const ImDrawData* drawData) {
   for (Int32 index = 0; index < drawData->CmdListsCount; ++index) {
     const ImDrawList* current = drawData->CmdLists[index];
 
-    memcpy (indices, current->IdxBuffer.Data, sizeof (ImDrawIdx) * current->IdxBuffer.Size);
-    memcpy (vertices, current->VtxBuffer.Data, sizeof (ImDrawVert) * current->VtxBuffer.Size);
+    memcpy (indices, current->IdxBuffer.Data, sizeof (ImDrawIdx) * (size_t) current->IdxBuffer.Size);
+    memcpy (vertices, current->VtxBuffer.Data, sizeof (ImDrawVert) * (size_t) current->VtxBuffer.Size);
 
     indices += current->IdxBuffer.Size;
     vertices += current->VtxBuffer.Size;
@@ -99,31 +87,27 @@ void Context::handleEvents (const xcb_generic_event_t* event) {
   }
 }
 
-void Context::renderDrawData (VkCommandBuffer commandBuffer, Uint32 frameIndex, const ImDrawData* drawData) {
-  VKC_BIND_DESCRIPTORS (commandBuffer, pipelineLayout, 1, &descriptorSet);
-  vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+void Context::renderDrawData (VkCommandBuffer cmdBuffer, Uint32 frameIndex, const ImDrawData* drawData) {
+  VKC_BIND_DESCRIPTORS (cmdBuffer, pipelineLayout, 1, &descriptorSet);
+  vkCmdBindPipeline (cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-  {
-    math::Vector2 pushConstants[2];
-    pushConstants[1] = math::Vector2 {-1.f};
-    pushConstants[0] = math::Vector2 {2.f / 1680.f, 2.f / 1050.f};
+  math::Vector2 pushConstants {2.f / 1680.f, 2.f / 1050.f};
 
-    vkCmdPushConstants (
-      commandBuffer,
-      pipelineLayout,
-      VK_SHADER_STAGE_VERTEX_BIT,
-      0,
-      sizeof (pushConstants),
-      pushConstants
-    );
-  }
+  vkCmdPushConstants (
+    cmdBuffer,
+    pipelineLayout,
+    VK_SHADER_STAGE_VERTEX_BIT,
+    0,
+    sizeof (pushConstants),
+    &pushConstants
+  );
 
   VkDeviceSize offset = 0;
   Int32 vertexOffset = 0;
   Uint32 indexOffset = 0;
 
-  vkCmdBindVertexBuffers (commandBuffer, 0, 1, &vertexBuffers[frameIndex].handle, &offset);
-  vkCmdBindIndexBuffer (commandBuffer, indexBuffers[frameIndex].handle, 0, VK_INDEX_TYPE_UINT16);
+  vkCmdBindVertexBuffers (cmdBuffer, 0, 1, &vertexBuffers[frameIndex].handle, &offset);
+  vkCmdBindIndexBuffer (cmdBuffer, indexBuffers[frameIndex].handle, 0, VK_INDEX_TYPE_UINT16);
 
   for (Int32 list = 0; list < drawData->CmdListsCount; ++list) {
     const ImDrawList* commandList = drawData->CmdLists[list];
@@ -137,10 +121,10 @@ void Context::renderDrawData (VkCommandBuffer commandBuffer, Uint32 frameIndex, 
       scissor.extent.width = (Uint32) (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
       scissor.extent.height = (Uint32) (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
 
-      vkCmdSetScissor (commandBuffer, 0, 1, &scissor);
+      vkCmdSetScissor (cmdBuffer, 0, 1, &scissor);
 
       vkCmdDrawIndexed (
-        commandBuffer,
+        cmdBuffer,
         drawCommand->ElemCount,
         1,
         drawCommand->IdxOffset + indexOffset,
@@ -158,7 +142,6 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
   output->allocator = allocator;
   output->handle = ImGui::CreateContext ();
   output->window = createInfo->window;
-  output->transferContext = createInfo->transferContext;
 
   // Create dummy vertex and index buffers for each frame.
   for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
@@ -241,7 +224,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     subresourceRange.baseArrayLayer = 0;
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    auto commandBuffer = vku::startImmediateCommand (device, createInfo->transferContext->commandPool);
+    auto cmdBuffer = vku::startImmediateCommand (device, createInfo->transferContext->commandPool);
 
     {
       vku::ImageLayoutTransitionInfo transitionInfo;
@@ -251,7 +234,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
       transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
       transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-      vku::transitionImageLayout (commandBuffer, &transitionInfo, output->fontTexture.handle);
+      vku::transitionImageLayout (cmdBuffer, &transitionInfo, output->fontTexture.handle);
     }
 
     {
@@ -271,7 +254,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
       copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
       vkCmdCopyBufferToImage (
-        commandBuffer,
+        cmdBuffer,
         stagingBuffer.handle,
         output->fontTexture.handle,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -287,10 +270,10 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
       transitionInfo.destination = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
       transitionInfo.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-      vku::transitionImageLayout (commandBuffer, &transitionInfo, output->fontTexture.handle);
+      vku::transitionImageLayout (cmdBuffer, &transitionInfo, output->fontTexture.handle);
     }
 
-    vku::submitImmediateCommand (device, createInfo->transferContext, commandBuffer);
+    vku::submitImmediateCommand (device, createInfo->transferContext, cmdBuffer);
     vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
 
     VkImageViewCreateInfo info;
@@ -367,7 +350,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
   {
     VkPushConstantRange pushConstantRange;
     pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof (math::Vector2) * 2;
+    pushConstantRange.size = sizeof (math::Vector2);
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkPipelineLayoutCreateInfo createInfo {PIPELINE_LAYOUT_CREATE_INFO};
@@ -390,17 +373,17 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     vertexAttributes[0].binding = 0;
     vertexAttributes[0].location = 0;
     vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[0].offset = offsetof (ImDrawVert, pos);
+    vertexAttributes[0].offset = REI_OFFSET_OF (ImDrawVert, pos);
 
     vertexAttributes[1].binding = 0;
     vertexAttributes[1].location = 1;
     vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[1].offset = offsetof (ImDrawVert, uv);
+    vertexAttributes[1].offset = REI_OFFSET_OF (ImDrawVert, uv);
 
     vertexAttributes[2].binding = 0;
     vertexAttributes[2].location = 2;
     vertexAttributes[2].format = VK_FORMAT_R8G8B8A8_UNORM;
-    vertexAttributes[2].offset = offsetof (ImDrawVert, col);
+    vertexAttributes[2].offset = REI_OFFSET_OF (ImDrawVert, col);
 
     VkPipelineVertexInputStateCreateInfo vertexInputState {PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     vertexInputState.vertexBindingDescriptionCount = 1;
@@ -469,13 +452,6 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     vku::createGraphicsPipeline (device, &info, &output->pipeline);
   }
 
-  {
-    VkFenceCreateInfo createInfo {FENCE_CREATE_INFO};
-    createInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-    VK_CHECK (vkCreateFence (device, &createInfo, nullptr, &output->bufferUpdateFence));
-  }
-
   ImGuiIO& io = ImGui::GetIO ();
   io.BackendRendererName = "Rei";
   io.BackendPlatformName = "Xcb";
@@ -494,8 +470,6 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
 }
 
 void destroy (VkDevice device, Context* context) {
-  vkDestroyFence (device, context->bufferUpdateFence, nullptr);
-
   for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
     vmaUnmapMemory (context->allocator, context->indexBuffers[index].allocation);
     vmaDestroyBuffer (context->allocator, context->indexBuffers[index].handle, context->indexBuffers[index].allocation);

@@ -100,6 +100,10 @@
 #  define MALLOC(Type, count) (Type*) malloc (sizeof (Type) * count)
 #endif
 
+#ifndef REI_OFFSET_OF
+#  define REI_OFFSET_OF(structure, member) ((size_t) &(((structure*) nullptr)->member))
+#endif
+
 #ifndef CLAMP
 #  define CLAMP(value, min, max) (((value) > (max)) ? (max) : (((value) < (min)) ? (min) : (value)))
 #endif
