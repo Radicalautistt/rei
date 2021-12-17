@@ -17,14 +17,14 @@ void Camera::update () noexcept {
   math::Vector3::normalize (&up);
 }
 
-void Camera::handleMouseMovement (Float32 x, Float32 y) noexcept {
+void Camera::handleMouseMovement (f32 x, f32 y) noexcept {
   if (firstMouse) {
     lastX = x;
     lastY = y;
-    firstMouse = False;
+    firstMouse = REI_FALSE;
   }
 
-  Float32 xOffset = x - lastX, yOffset = lastY - y;
+  f32 xOffset = x - lastX, yOffset = lastY - y;
   lastX = x;
   lastY = y;
 
@@ -36,8 +36,8 @@ void Camera::handleMouseMovement (Float32 x, Float32 y) noexcept {
   update ();
 }
 
-void Camera::move (Direction direction, Float32 deltaTime) noexcept {
-  Float32 velocity = speed * deltaTime;
+void Camera::move (Direction direction, f32 deltaTime) noexcept {
+  f32 velocity = speed * deltaTime;
 
   switch (direction) {
     case Direction::Left: {
@@ -66,8 +66,8 @@ void Camera::move (Direction direction, Float32 deltaTime) noexcept {
   }
 }
 
-Camera::Camera (const math::Vector3& up, const math::Vector3& position, Float32 yaw, Float32 pitch)
-  : firstMouse {True}, zoom {45.f}, speed {20.f}, sensitivity {0.1f},
+Camera::Camera (const math::Vector3& up, const math::Vector3& position, f32 yaw, f32 pitch)
+  : firstMouse {REI_TRUE}, zoom {45.f}, speed {20.f}, sensitivity {0.1f},
   yaw {yaw}, pitch {pitch}, worldUp {up}, position {position} {
 
   update ();

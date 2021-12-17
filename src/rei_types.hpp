@@ -1,28 +1,28 @@
 #ifndef REI_TYPES_HPP
 #define REI_TYPES_HPP
 
-typedef unsigned char Uint8;
-typedef unsigned short int Uint16;
-typedef unsigned int Uint32;
-typedef unsigned long int Uint64;
+typedef unsigned char u8;
+typedef unsigned short int u16;
+typedef unsigned int u32;
+typedef unsigned long int u64;
 
-typedef signed char Int8;
-typedef signed short int Int16;
-typedef signed int Int32;
-typedef signed long int Int64;
+typedef signed char i8;
+typedef signed short int i16;
+typedef signed int i32;
+typedef signed long int i64;
 
-typedef float Float32;
-typedef double Float64;
+typedef float f32;
+typedef double f64;
 
-typedef Uint8 Bool;
-typedef Uint32 Bool32;
+typedef u8 b8;
+typedef u32 b32;
 
-#ifndef True
-#  define True 1u
+#ifndef REI_TRUE
+#  define REI_TRUE 1u
 #endif
 
-#ifndef False
-#  define False 0u
+#ifndef REI_FALSE
+#  define REI_FALSE 0u
 #endif
 
 #endif /* REI_TYPES_HPP */

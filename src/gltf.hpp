@@ -7,7 +7,7 @@
 
 namespace rei::assets::gltf {
 
-enum class AccessorComponentType : Uint32 {
+enum class AccessorComponentType : u32 {
   Int8,
   Int16,
   Float,
@@ -18,7 +18,7 @@ enum class AccessorComponentType : Uint32 {
   Unknown
 };
 
-enum class AccessorType : Uint32 {
+enum class AccessorType : u32 {
   Vec2,
   Vec3,
   Vec4,
@@ -30,7 +30,7 @@ enum class AccessorType : Uint32 {
   Unknown
 };
 
-enum class TopologyType : Uint32 {
+enum class TopologyType : u32 {
   Lines,
   Points,
   LineLoop,
@@ -42,7 +42,7 @@ enum class TopologyType : Uint32 {
   Unknown
 };
 
-enum class AlphaMode : Uint32 {
+enum class AlphaMode : u32 {
   Mask,
   Blend,
   Opaque,
@@ -50,7 +50,7 @@ enum class AlphaMode : Uint32 {
   Unknown
 };
 
-enum class MimeType : Uint8 {
+enum class MimeType : u8 {
   Png,
   Jpeg,
 
@@ -61,15 +61,15 @@ struct Accessor {
   AccessorType type;
   AccessorComponentType componentType;
 
-  Uint32 count;
-  Uint32 bufferView;
-  Uint32 byteOffset;
+  u32 count;
+  u32 bufferView;
+  u32 byteOffset;
 };
 
 struct BufferView {
-  Uint32 buffer;
-  Uint32 byteLength;
-  Uint32 byteOffset;
+  u32 buffer;
+  u32 byteLength;
+  u32 byteOffset;
 };
 
 struct Image {
@@ -78,24 +78,24 @@ struct Image {
 };
 
 struct Texture {
-  Uint32 source;
+  u32 source;
 };
 
 struct Material {
   AlphaMode alphaMode;
   // PBR metallic rougness
-  Uint32 baseColorTexture;
+  u32 baseColorTexture;
 };
 
 struct Primitive {
-  Uint32 indices;
-  Uint32 material;
+  u32 indices;
+  u32 material;
 
   struct {
-    Uint32 uv;
-    Uint32 normal;
-    Uint32 tangent;
-    Uint32 position;
+    u32 uv;
+    u32 normal;
+    u32 tangent;
+    u32 position;
   } attributes;
   TopologyType mode;
 };
@@ -106,7 +106,7 @@ struct Mesh {
 };
 
 struct Data {
-  Uint8* buffer;
+  u8* buffer;
   size_t bufferSize;
 
   BufferView* bufferViews;
@@ -131,10 +131,10 @@ struct Data {
 
 [[nodiscard]] MimeType parseMimeType (const char* rawType) noexcept;
 [[nodiscard]] AlphaMode parseAlphaMode (const char* rawMode) noexcept;
-[[nodiscard]] TopologyType parsePrimitiveMode (Uint64 mode) noexcept;
-[[nodiscard]] Uint8 countComponents (AccessorType accessorType) noexcept;
+[[nodiscard]] TopologyType parsePrimitiveMode (u64 mode) noexcept;
+[[nodiscard]] u8 countComponents (AccessorType accessorType) noexcept;
 [[nodiscard]] AccessorType parseAccessorType (const char* rawType) noexcept;
-[[nodiscard]] AccessorComponentType parseAccessorComponentType (Uint64 type) noexcept;
+[[nodiscard]] AccessorComponentType parseAccessorComponentType (u64 type) noexcept;
 
 void load (const char* relativePath, Data* output);
 void destroy (Data* data);

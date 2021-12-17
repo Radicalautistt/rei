@@ -7,7 +7,7 @@
 
 namespace rei::imgui {
 
-void Context::updateBuffers (Uint32 frameIndex, const ImDrawData* drawData) {
+void Context::updateBuffers (u32 frameIndex, const ImDrawData* drawData) {
   auto indexBuffer = &indexBuffers[frameIndex];
   auto vertexBuffer = &vertexBuffers[frameIndex];
 
@@ -27,7 +27,7 @@ void Context::updateBuffers (Uint32 frameIndex, const ImDrawData* drawData) {
     allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
     vku::allocateBuffer (allocator, &allocationInfo, vertexBuffer);
-    VK_CHECK (vmaMapMemory (allocator, vertexBuffer->allocation, &vertexBuffer->mapped));
+    VKC_CHECK (vmaMapMemory (allocator, vertexBuffer->allocation, &vertexBuffer->mapped));
 
     vmaUnmapMemory (allocator, indexBuffer->allocation);
     vmaDestroyBuffer (allocator, indexBuffer->handle, indexBuffer->allocation);
@@ -37,13 +37,13 @@ void Context::updateBuffers (Uint32 frameIndex, const ImDrawData* drawData) {
     allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
     vku::allocateBuffer (allocator, &allocationInfo, indexBuffer);
-    VK_CHECK (vmaMapMemory (allocator, indexBuffer->allocation, &indexBuffer->mapped));
+    VKC_CHECK (vmaMapMemory (allocator, indexBuffer->allocation, &indexBuffer->mapped));
   }
 
   auto indices = (ImDrawIdx*) indexBuffer->mapped;
   auto vertices = (ImDrawVert*) vertexBuffer->mapped;
 
-  for (Int32 index = 0; index < drawData->CmdListsCount; ++index) {
+  for (i32 index = 0; index < drawData->CmdListsCount; ++index) {
     const ImDrawList* current = drawData->CmdLists[index];
 
     memcpy (indices, current->IdxBuffer.Data, sizeof (ImDrawIdx) * (size_t) current->IdxBuffer.Size);
@@ -57,7 +57,7 @@ void Context::updateBuffers (Uint32 frameIndex, const ImDrawData* drawData) {
   VkDeviceSize sizes[2] {vertexBufferSize, indexBufferSize};
   VmaAllocation allocations[2] {vertexBuffer->allocation, indexBuffer->allocation};
 
-  VK_CHECK (vmaFlushAllocations (allocator, 2, allocations, offsets, sizes));
+  VKC_CHECK (vmaFlushAllocations (allocator, 2, allocations, offsets, sizes));
 }
 
 void Context::newFrame () {
@@ -68,7 +68,7 @@ void Context::newFrame () {
   io.MouseDown[0] = mouseButtonsDown[0];
   io.MouseDown[1] = mouseButtonsDown[1];
 
-  mouseButtonsDown[0] = mouseButtonsDown[1] = False;
+  mouseButtonsDown[0] = mouseButtonsDown[1] = REI_FALSE;
 
   ImGui::NewFrame ();
 }
@@ -87,39 +87,31 @@ void Context::handleEvents (const xcb_generic_event_t* event) {
   }
 }
 
-void Context::renderDrawData (VkCommandBuffer cmdBuffer, Uint32 frameIndex, const ImDrawData* drawData) {
+void Context::renderDrawData (VkCommandBuffer cmdBuffer, u32 frameIndex, const ImDrawData* drawData) {
   VKC_BIND_DESCRIPTORS (cmdBuffer, pipelineLayout, 1, &descriptorSet);
   vkCmdBindPipeline (cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
   math::Vector2 pushConstants {2.f / 1680.f, 2.f / 1050.f};
+  vkCmdPushConstants (cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Vector2), &pushConstants);
 
-  vkCmdPushConstants (
-    cmdBuffer,
-    pipelineLayout,
-    VK_SHADER_STAGE_VERTEX_BIT,
-    0,
-    sizeof (pushConstants),
-    &pushConstants
-  );
-
+  i32 vertexOffset = 0;
+  u32 indexOffset = 0;
   VkDeviceSize offset = 0;
-  Int32 vertexOffset = 0;
-  Uint32 indexOffset = 0;
 
   vkCmdBindVertexBuffers (cmdBuffer, 0, 1, &vertexBuffers[frameIndex].handle, &offset);
   vkCmdBindIndexBuffer (cmdBuffer, indexBuffers[frameIndex].handle, 0, VK_INDEX_TYPE_UINT16);
 
-  for (Int32 list = 0; list < drawData->CmdListsCount; ++list) {
+  for (i32 list = 0; list < drawData->CmdListsCount; ++list) {
     const ImDrawList* commandList = drawData->CmdLists[list];
 
-    for (Int32 command = 0; command < commandList->CmdBuffer.Size; ++command) {
+    for (i32 command = 0; command < commandList->CmdBuffer.Size; ++command) {
       const ImDrawCmd* drawCommand = &commandList->CmdBuffer[command];
 
       VkRect2D scissor;
-      scissor.offset.x = MAX ((Int32) drawCommand->ClipRect.x, 0);
-      scissor.offset.y = MAX ((Int32) drawCommand->ClipRect.y, 0);
-      scissor.extent.width = (Uint32) (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
-      scissor.extent.height = (Uint32) (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
+      scissor.offset.x = REI_MAX ((i32) drawCommand->ClipRect.x, 0);
+      scissor.offset.y = REI_MAX ((i32) drawCommand->ClipRect.y, 0);
+      scissor.extent.width = (u32) (drawCommand->ClipRect.z - drawCommand->ClipRect.x);
+      scissor.extent.height = (u32) (drawCommand->ClipRect.w - drawCommand->ClipRect.y);
 
       vkCmdSetScissor (cmdBuffer, 0, 1, &scissor);
 
@@ -144,7 +136,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
   output->window = createInfo->window;
 
   // Create dummy vertex and index buffers for each frame.
-  for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
+  for (u8 index = 0; index < REI_FRAMES_COUNT; ++index) {
     auto indexBuffer = &output->indexBuffers[index];
     auto vertexBuffer = &output->vertexBuffers[index];
 
@@ -157,35 +149,35 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
     vku::allocateBuffer (output->allocator, &allocationInfo, vertexBuffer);
-    VK_CHECK (vmaMapMemory (output->allocator, vertexBuffer->allocation, &vertexBuffer->mapped));
+    VKC_CHECK (vmaMapMemory (output->allocator, vertexBuffer->allocation, &vertexBuffer->mapped));
 
     allocationInfo.bufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     allocationInfo.bufferUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
     vku::allocateBuffer (output->allocator, &allocationInfo, indexBuffer);
-    VK_CHECK (vmaMapMemory (output->allocator, indexBuffer->allocation, &indexBuffer->mapped));
+    VKC_CHECK (vmaMapMemory (output->allocator, indexBuffer->allocation, &indexBuffer->mapped));
   }
 
   { // Create font texture
-    Int32 width, height;
-    Uint8* pixels;
+    i32 width, height;
+    u8* pixels;
     ImGuiIO& io = ImGui::GetIO ();
     io.Fonts->GetTexDataAsRGBA32 (&pixels, &width, &height);
 
-    VkExtent3D extent {(Uint32) width, (Uint32) height, 1};
+    VkExtent3D extent {(u32) width, (u32) height, 1};
     VkDeviceSize size = (VkDeviceSize) (extent.width * extent.height * 4);
 
     vku::Buffer stagingBuffer;
     vku::allocateStagingBuffer (allocator, size, &stagingBuffer);
 
-    VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
+    VKC_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
     memcpy (stagingBuffer.mapped, pixels, size);
     vmaUnmapMemory (allocator, stagingBuffer.allocation);
 
     {
       VkImageCreateInfo info;
       info.pNext = nullptr;
-      info.flags = VULKAN_NO_FLAGS;
+      info.flags = VKC_NO_FLAGS;
       info.sType = IMAGE_CREATE_INFO;
       info.queueFamilyIndexCount = 0;
       info.pQueueFamilyIndices = nullptr;
@@ -194,7 +186,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
       info.mipLevels = 1;
       info.arrayLayers = 1;
       info.imageType = VK_IMAGE_TYPE_2D;
-      info.format = VULKAN_TEXTURE_FORMAT;
+      info.format = VKC_TEXTURE_FORMAT;
       info.samples = VK_SAMPLE_COUNT_1_BIT;
       info.tiling = VK_IMAGE_TILING_OPTIMAL;
       info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -207,7 +199,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
       vmaAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
       vmaAllocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-      VK_CHECK (vmaCreateImage (
+      VKC_CHECK (vmaCreateImage (
         allocator,
         &info,
         &vmaAllocationInfo,
@@ -278,9 +270,9 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
 
     VkImageViewCreateInfo info;
     info.pNext = nullptr;
-    info.flags = VULKAN_NO_FLAGS;
+    info.flags = VKC_NO_FLAGS;
     info.sType = IMAGE_VIEW_CREATE_INFO;
-    info.format = VULKAN_TEXTURE_FORMAT;
+    info.format = VKC_TEXTURE_FORMAT;
     info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     info.image = output->fontTexture.handle;
     info.subresourceRange = subresourceRange;
@@ -289,7 +281,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     info.components.b = VK_COMPONENT_SWIZZLE_B;
     info.components.a = VK_COMPONENT_SWIZZLE_A;
 
-    VK_CHECK (vkCreateImageView (device, &info, nullptr, &output->fontTexture.view));
+    VKC_CHECK (vkCreateImageView (device, &info, nullptr, &output->fontTexture.view));
 
     io.Fonts->ClearTexData ();
     io.Fonts->SetTexID ((ImTextureID) ((intptr_t) output->fontTexture.handle));
@@ -304,7 +296,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
 
-    VK_CHECK (vkCreateSampler (device, &samplerInfo, nullptr, &output->fontSampler));
+    VKC_CHECK (vkCreateSampler (device, &samplerInfo, nullptr, &output->fontSampler));
   }
 
   { // Create descriptor set layout for font sampler
@@ -319,7 +311,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     layoutInfo.bindingCount = 1;
     layoutInfo.pBindings = &binding;
 
-    VK_CHECK (vkCreateDescriptorSetLayout (device, &layoutInfo, nullptr, &output->descriptorSetLayout));
+    VKC_CHECK (vkCreateDescriptorSetLayout (device, &layoutInfo, nullptr, &output->descriptorSetLayout));
   }
 
   { // Allocate descriptor set for font sampler
@@ -328,7 +320,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     allocationInfo.pSetLayouts = &output->descriptorSetLayout;
     allocationInfo.descriptorPool = createInfo->descriptorPool;
 
-    VK_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &output->descriptorSet));
+    VKC_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &output->descriptorSet));
   }
 
   {
@@ -359,7 +351,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     createInfo.pPushConstantRanges = &pushConstantRange;
     createInfo.pSetLayouts = &output->descriptorSetLayout;
 
-    VK_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &output->pipelineLayout));
+    VKC_CHECK (vkCreatePipelineLayout (device, &createInfo, nullptr, &output->pipelineLayout));
   }
 
   {
@@ -389,7 +381,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     vertexInputState.vertexBindingDescriptionCount = 1;
     vertexInputState.pVertexBindingDescriptions = &binding;
     vertexInputState.pVertexAttributeDescriptions = vertexAttributes;
-    vertexInputState.vertexAttributeDescriptionCount = ARRAY_SIZE (vertexAttributes);
+    vertexInputState.vertexAttributeDescriptionCount = REI_ARRAY_SIZE (vertexAttributes);
 
     VkViewport viewport;
     viewport.x = 0;
@@ -470,7 +462,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
 }
 
 void destroy (VkDevice device, Context* context) {
-  for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
+  for (u8 index = 0; index < REI_FRAMES_COUNT; ++index) {
     vmaUnmapMemory (context->allocator, context->indexBuffers[index].allocation);
     vmaDestroyBuffer (context->allocator, context->indexBuffers[index].handle, context->indexBuffers[index].allocation);
 
@@ -491,7 +483,7 @@ void destroy (VkDevice device, Context* context) {
   ImGui::DestroyContext (context->handle);
 }
 
-void showDebugWindow (Float32* cameraSpeed, Uint32* gbufferOutput, VmaAllocator allocator) {
+void showDebugWindow (f32* cameraSpeed, u32* gbufferOutput, VmaAllocator allocator) {
   const ImGuiIO& io = ImGui::GetIO ();
   ImGui::Begin ("REI Debug window");
   ImGui::SetWindowPos ({0.f, 0.f});
@@ -499,8 +491,8 @@ void showDebugWindow (Float32* cameraSpeed, Uint32* gbufferOutput, VmaAllocator 
 
   static size_t usedBytes;
   static size_t freeBytes;
-  static Uint32 frameIndex;
-  static Uint32 allocationCount;
+  static u32 frameIndex;
+  static u32 allocationCount;
 
   ImGui::Text ("Frames rendered: %u\nAverage frame time: %.3f ms (%.1f FPS)", frameIndex++, 1000.f / io.Framerate, io.Framerate);
   ImGui::Separator ();

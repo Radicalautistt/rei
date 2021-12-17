@@ -1,7 +1,4 @@
-#include <stdio.h>
-
 #include "imgui.hpp"
-#include "common.hpp"
 #include "camera.hpp"
 #include "window.hpp"
 #include "vkutils.hpp"
@@ -12,15 +9,14 @@
 #include <imgui/imgui.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
 
-#define GBUFFER_ATTACHMENT_COUNT 3u
+#define REI_GB_ATTACHMENT_COUNT 3u
 
 struct Frame {
   VkCommandPool commandPool;
   VkCommandBuffer offscreenCmd;
   VkCommandBuffer compositionCmd;
 
-  VkFence offscreenFence;
-  VkFence compositionFence;
+  VkFence submitFence;
   VkSemaphore compositionSemaphore;
   VkSemaphore presentSemaphore;
   VkSemaphore offscreenSemaphore;
@@ -34,7 +30,7 @@ struct Light {
 };
 
 struct GBufferCreateInfo {
-  Uint32 width, height;
+  u32 width, height;
   VkPipelineCache pipelineCache;
   VkDescriptorPool descriptorPool;
   VkRenderPass lightRenderPass;
@@ -51,8 +47,8 @@ struct GBuffer {
     VkRenderPass renderPass;
     VkFramebuffer framebuffer;
     rei::vku::Image depthAttachment;
-    rei::vku::Image attachments[GBUFFER_ATTACHMENT_COUNT];
-    VkClearValue clearValues[GBUFFER_ATTACHMENT_COUNT + 1];
+    rei::vku::Image attachments[REI_GB_ATTACHMENT_COUNT];
+    VkClearValue clearValues[REI_GB_ATTACHMENT_COUNT + 1];
   } geometryPass;
 
   struct {
@@ -74,16 +70,16 @@ struct LightPassPushConstants {
   // 1 - albedo
   // 2 - normal
   // 3 - position
-  Uint32 target;
+  u32 target;
   rei::math::Vector4 viewPosition;
 };
 
 static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBufferCreateInfo* createInfo, GBuffer* out) {
-  for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+  for (u8 index = 0; index < REI_GB_ATTACHMENT_COUNT; ++index) {
     rei::vku::AttachmentCreateInfo info;
     info.width = createInfo->width;
     info.height = createInfo->height;
-    info.format = VULKAN_TEXTURE_FORMAT;
+    info.format = VKC_TEXTURE_FORMAT;
     info.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     info.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -105,12 +101,12 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
   }
 
   {
-    VkAttachmentReference references[GBUFFER_ATTACHMENT_COUNT];
-    VkAttachmentDescription attachments[GBUFFER_ATTACHMENT_COUNT + 1];
+    VkAttachmentReference references[REI_GB_ATTACHMENT_COUNT];
+    VkAttachmentDescription attachments[REI_GB_ATTACHMENT_COUNT + 1];
 
-    for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
-      attachments[index].flags = VULKAN_NO_FLAGS;
-      attachments[index].format = VULKAN_TEXTURE_FORMAT;
+    for (u8 index = 0; index < REI_GB_ATTACHMENT_COUNT; ++index) {
+      attachments[index].flags = VKC_NO_FLAGS;
+      attachments[index].format = VKC_TEXTURE_FORMAT;
       attachments[index].samples = VK_SAMPLE_COUNT_1_BIT;
       attachments[index].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
       attachments[index].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -123,22 +119,22 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
       references[index].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
 
-    attachments[GBUFFER_ATTACHMENT_COUNT].flags = VULKAN_NO_FLAGS;
-    attachments[GBUFFER_ATTACHMENT_COUNT].format = VK_FORMAT_D24_UNORM_S8_UINT;
-    attachments[GBUFFER_ATTACHMENT_COUNT].samples = VK_SAMPLE_COUNT_1_BIT;
-    attachments[GBUFFER_ATTACHMENT_COUNT].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachments[GBUFFER_ATTACHMENT_COUNT].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachments[GBUFFER_ATTACHMENT_COUNT].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachments[GBUFFER_ATTACHMENT_COUNT].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachments[GBUFFER_ATTACHMENT_COUNT].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[GBUFFER_ATTACHMENT_COUNT].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    attachments[REI_GB_ATTACHMENT_COUNT].flags = VKC_NO_FLAGS;
+    attachments[REI_GB_ATTACHMENT_COUNT].format = VK_FORMAT_D24_UNORM_S8_UINT;
+    attachments[REI_GB_ATTACHMENT_COUNT].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[REI_GB_ATTACHMENT_COUNT].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[REI_GB_ATTACHMENT_COUNT].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[REI_GB_ATTACHMENT_COUNT].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[REI_GB_ATTACHMENT_COUNT].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[REI_GB_ATTACHMENT_COUNT].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[REI_GB_ATTACHMENT_COUNT].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference depthReference;
-    depthReference.attachment = GBUFFER_ATTACHMENT_COUNT;
+    depthReference.attachment = REI_GB_ATTACHMENT_COUNT;
     depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass;
-    subpass.flags = VULKAN_NO_FLAGS;
+    subpass.flags = VKC_NO_FLAGS;
     subpass.inputAttachmentCount = 0;
     subpass.preserveAttachmentCount = 0;
     subpass.pInputAttachments = nullptr;
@@ -146,7 +142,7 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     subpass.pPreserveAttachments = nullptr;
     subpass.pColorAttachments = references;
     subpass.pDepthStencilAttachment = &depthReference;
-    subpass.colorAttachmentCount = GBUFFER_ATTACHMENT_COUNT;
+    subpass.colorAttachmentCount = REI_GB_ATTACHMENT_COUNT;
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     VkRenderPassCreateInfo info;
@@ -154,26 +150,26 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     info.subpassCount = 1;
     info.dependencyCount = 0;
     info.pSubpasses = &subpass;
-    info.flags = VULKAN_NO_FLAGS;
+    info.flags = VKC_NO_FLAGS;
     info.pDependencies = nullptr;
     info.pAttachments = attachments;
     info.sType = RENDER_PASS_CREATE_INFO;
-    info.attachmentCount = GBUFFER_ATTACHMENT_COUNT + 1;
+    info.attachmentCount = REI_GB_ATTACHMENT_COUNT + 1;
 
-    VK_CHECK (vkCreateRenderPass (device, &info, nullptr, &out->geometryPass.renderPass));
+    VKC_CHECK (vkCreateRenderPass (device, &info, nullptr, &out->geometryPass.renderPass));
   }
 
   out->lightPass.renderPass = createInfo->lightRenderPass;
   out->lightPass.clearValues[0].color = {{0.f, 0.f, 0.f, 0.f}};
   out->lightPass.clearValues[1].depthStencil = {1.f, 0};
 
-  for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index)
+  for (u8 index = 0; index < REI_GB_ATTACHMENT_COUNT; ++index)
     out->geometryPass.clearValues[index].color = {{0.f, 0.f, 0.f, 0.f}};
 
-  out->geometryPass.clearValues[GBUFFER_ATTACHMENT_COUNT].depthStencil = {1.f, 0};
+  out->geometryPass.clearValues[REI_GB_ATTACHMENT_COUNT].depthStencil = {1.f, 0};
 
   {
-    VkImageView attachments[GBUFFER_ATTACHMENT_COUNT + 1] {
+    VkImageView attachments[REI_GB_ATTACHMENT_COUNT + 1] {
       out->geometryPass.attachments[0].view,
       out->geometryPass.attachments[1].view,
       out->geometryPass.attachments[2].view,
@@ -183,15 +179,15 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     VkFramebufferCreateInfo info;
     info.layers = 1;
     info.pNext = nullptr;
-    info.flags = VULKAN_NO_FLAGS;
+    info.flags = VKC_NO_FLAGS;
     info.width = createInfo->width;
     info.pAttachments = attachments;
     info.height = createInfo->height;
     info.sType = FRAMEBUFFER_CREATE_INFO;
     info.renderPass = out->geometryPass.renderPass;
-    info.attachmentCount = GBUFFER_ATTACHMENT_COUNT + 1;
+    info.attachmentCount = REI_GB_ATTACHMENT_COUNT + 1;
 
-    VK_CHECK (vkCreateFramebuffer (device, &info, nullptr, &out->geometryPass.framebuffer));
+    VKC_CHECK (vkCreateFramebuffer (device, &info, nullptr, &out->geometryPass.framebuffer));
   }
 
   {
@@ -201,7 +197,7 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     info.pNext = nullptr;
     info.mipLodBias = 0.f;
     info.maxAnisotropy = 1.f;
-    info.flags = VULKAN_NO_FLAGS;
+    info.flags = VKC_NO_FLAGS;
     info.compareEnable = VK_FALSE;
     info.sType = SAMPLER_CREATE_INFO;
     info.anisotropyEnable = VK_FALSE;
@@ -215,12 +211,12 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-    VK_CHECK (vkCreateSampler (device, &info, nullptr, &out->sampler));
+    VKC_CHECK (vkCreateSampler (device, &info, nullptr, &out->sampler));
   }
 
   {
-    VkDescriptorSetLayoutBinding bindings[GBUFFER_ATTACHMENT_COUNT];
-    for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+    VkDescriptorSetLayoutBinding bindings[REI_GB_ATTACHMENT_COUNT];
+    for (u8 index = 0; index < REI_GB_ATTACHMENT_COUNT; ++index) {
       bindings[index].binding = index;
       bindings[index].descriptorCount = 1;
       bindings[index].pImmutableSamplers = nullptr;
@@ -231,16 +227,16 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     VkDescriptorSetLayoutCreateInfo info;
     info.pNext = nullptr;
     info.pBindings = bindings;
-    info.flags = VULKAN_NO_FLAGS;
-    info.bindingCount = GBUFFER_ATTACHMENT_COUNT;
+    info.flags = VKC_NO_FLAGS;
+    info.bindingCount = REI_GB_ATTACHMENT_COUNT;
     info.sType = DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 
-    VK_CHECK (vkCreateDescriptorSetLayout (device, &info, nullptr, &out->lightPass.descriptorLayout));
+    VKC_CHECK (vkCreateDescriptorSetLayout (device, &info, nullptr, &out->lightPass.descriptorLayout));
 
     info.bindingCount = 1;
     info.pBindings = &bindings[0];
 
-    VK_CHECK (vkCreateDescriptorSetLayout (device, &info, nullptr, &out->geometryPass.descriptorLayout));
+    VKC_CHECK (vkCreateDescriptorSetLayout (device, &info, nullptr, &out->geometryPass.descriptorLayout));
   }
 
   {
@@ -251,14 +247,14 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     allocationInfo.descriptorPool = createInfo->descriptorPool;
     allocationInfo.pSetLayouts = &out->lightPass.descriptorLayout;
 
-    VK_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &out->lightPass.descriptorSet));
+    VKC_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &out->lightPass.descriptorSet));
   }
 
   {
-    VkWriteDescriptorSet writes[GBUFFER_ATTACHMENT_COUNT];
-    VkDescriptorImageInfo imageInfos[GBUFFER_ATTACHMENT_COUNT];
+    VkWriteDescriptorSet writes[REI_GB_ATTACHMENT_COUNT];
+    VkDescriptorImageInfo imageInfos[REI_GB_ATTACHMENT_COUNT];
 
-    for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+    for (u8 index = 0; index < REI_GB_ATTACHMENT_COUNT; ++index) {
       imageInfos[index].sampler = out->sampler;
       imageInfos[index].imageView = out->geometryPass.attachments[index].view;
       imageInfos[index].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -275,7 +271,7 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
       writes[index].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     }
 
-    vkUpdateDescriptorSets (device, GBUFFER_ATTACHMENT_COUNT, writes, 0, nullptr);
+    vkUpdateDescriptorSets (device, REI_GB_ATTACHMENT_COUNT, writes, 0, nullptr);
   }
 
   {
@@ -287,19 +283,19 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     VkPipelineLayoutCreateInfo info;
     info.pNext = nullptr;
     info.setLayoutCount = 1;
-    info.flags = VULKAN_NO_FLAGS;
+    info.flags = VKC_NO_FLAGS;
     info.pushConstantRangeCount = 1;
     info.pPushConstantRanges = &pushConstant;
     info.sType = PIPELINE_LAYOUT_CREATE_INFO;
     info.pSetLayouts = &out->geometryPass.descriptorLayout;
 
-    VK_CHECK (vkCreatePipelineLayout (device, &info, nullptr, &out->geometryPass.pipelineLayout));
+    VKC_CHECK (vkCreatePipelineLayout (device, &info, nullptr, &out->geometryPass.pipelineLayout));
 
     info.pSetLayouts = &out->lightPass.descriptorLayout;
     pushConstant.size = sizeof (LightPassPushConstants);
     pushConstant.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    VK_CHECK (vkCreatePipelineLayout (device, &info, nullptr, &out->lightPass.pipelineLayout));
+    VKC_CHECK (vkCreatePipelineLayout (device, &info, nullptr, &out->lightPass.pipelineLayout));
   }
 
   {
@@ -326,7 +322,7 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
 
     VkPipelineVertexInputStateCreateInfo vertexInputState;
     vertexInputState.pNext = nullptr;
-    vertexInputState.flags = VULKAN_NO_FLAGS;
+    vertexInputState.flags = VKC_NO_FLAGS;
     vertexInputState.vertexBindingDescriptionCount = 1;
     vertexInputState.vertexAttributeDescriptionCount = 3;
     vertexInputState.pVertexBindingDescriptions = &binding;
@@ -343,8 +339,8 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     viewport.y = 0.f;
     viewport.minDepth = 0.f;
     viewport.maxDepth = 1.f;
-    viewport.width = (Float32) createInfo->width;
-    viewport.height = (Float32) createInfo->height;
+    viewport.width = (f32) createInfo->width;
+    viewport.height = (f32) createInfo->height;
 
     VkPipelineViewportStateCreateInfo viewportState;
     viewportState.pNext = nullptr;
@@ -352,14 +348,14 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     viewportState.viewportCount = 1;
     viewportState.pScissors = &scissor;
     viewportState.pViewports = &viewport;
-    viewportState.flags = VULKAN_NO_FLAGS;
+    viewportState.flags = VKC_NO_FLAGS;
     viewportState.sType = PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 
     VkPipelineRasterizationStateCreateInfo rasterizationState;
     rasterizationState.pNext = nullptr;
     rasterizationState.lineWidth = 1.f;
     rasterizationState.depthBiasClamp = 0.f;
-    rasterizationState.flags = VULKAN_NO_FLAGS;
+    rasterizationState.flags = VKC_NO_FLAGS;
     rasterizationState.depthBiasSlopeFactor = 0.f;
     rasterizationState.depthBiasEnable = VK_FALSE;
     rasterizationState.depthClampEnable = VK_FALSE;
@@ -377,7 +373,7 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     depthStencilState.pNext = nullptr;
     depthStencilState.minDepthBounds = 0.f;
     depthStencilState.maxDepthBounds = 1.f;
-    depthStencilState.flags = VULKAN_NO_FLAGS;
+    depthStencilState.flags = VKC_NO_FLAGS;
     depthStencilState.depthTestEnable = VK_TRUE;
     depthStencilState.depthWriteEnable = VK_TRUE;
     depthStencilState.stencilTestEnable = VK_FALSE;
@@ -385,9 +381,9 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
     depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     depthStencilState.sType = PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 
-    VkPipelineColorBlendAttachmentState colorBlendAttachments[GBUFFER_ATTACHMENT_COUNT];
+    VkPipelineColorBlendAttachmentState colorBlendAttachments[REI_GB_ATTACHMENT_COUNT];
 
-    for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+    for (u8 index = 0; index < REI_GB_ATTACHMENT_COUNT; ++index) {
       colorBlendAttachments[index].colorWriteMask = 0xF;
       colorBlendAttachments[index].blendEnable = VK_FALSE;
       colorBlendAttachments[index].colorBlendOp = VK_BLEND_OP_ADD;
@@ -462,7 +458,7 @@ static void destroyGBuffer (VkDevice device, VmaAllocator allocator, GBuffer* gb
   vkDestroyImageView (device, gbuffer->geometryPass.depthAttachment.view, nullptr);
   vmaDestroyImage (allocator, gbuffer->geometryPass.depthAttachment.handle, gbuffer->geometryPass.depthAttachment.allocation);
 
-  for (Uint8 index = 0; index < GBUFFER_ATTACHMENT_COUNT; ++index) {
+  for (u8 index = 0; index < REI_GB_ATTACHMENT_COUNT; ++index) {
     auto current = &gbuffer->geometryPass.attachments[index];
     vkDestroyImageView (device, current->view, nullptr);
     vmaDestroyImage (allocator, current->handle, current->allocation);
@@ -481,7 +477,7 @@ int main () {
   VkSurfaceKHR windowSurface;
   VkPhysicalDevice physicalDevice;
   VkDevice device;
-  Uint32 queueFamilyIndex;
+  u32 queueFamilyIndex;
   VkQueue graphicsQueue, presentQueue, computeQueue;
 
   VmaAllocator allocator;
@@ -489,8 +485,8 @@ int main () {
   rei::vku::Swapchain swapchain;
   VkRenderPass defaultRenderPass;
 
-  Uint32 frameIndex = 0;
-  Frame frames[FRAMES_COUNT];
+  u32 frameIndex = 0;
+  Frame frames[REI_FRAMES_COUNT];
   VkFramebuffer* framebuffers;
 
   VkPipelineCache pipelineCache;
@@ -531,18 +527,18 @@ int main () {
     applicationInfo.pEngineName = "Rei";
     applicationInfo.applicationVersion = 0;
     applicationInfo.sType = APPLICATION_INFO;
-    applicationInfo.apiVersion = VULKAN_VERSION;
+    applicationInfo.apiVersion = VKC_VERSION;
     applicationInfo.pApplicationName = "Playground";
 
     VkInstanceCreateInfo createInfo;
     createInfo.pNext = nullptr;
     createInfo.enabledLayerCount = 0;
-    createInfo.flags = VULKAN_NO_FLAGS;
+    createInfo.flags = VKC_NO_FLAGS;
     createInfo.sType = INSTANCE_CREATE_INFO;
     createInfo.ppEnabledLayerNames = nullptr;
     createInfo.pApplicationInfo = &applicationInfo;
     createInfo.ppEnabledExtensionNames = requiredExtensions;
-    createInfo.enabledExtensionCount = ARRAY_SIZE (requiredExtensions);
+    createInfo.enabledExtensionCount = REI_ARRAY_SIZE (requiredExtensions);
 
     #ifndef NDEBUG
     const char* validationLayers[] {"VK_LAYER_KHRONOS_validation"};
@@ -550,7 +546,7 @@ int main () {
     VkDebugUtilsMessengerCreateInfoEXT debugMessengerInfo;
     debugMessengerInfo.pNext = nullptr;
     debugMessengerInfo.pUserData = nullptr;
-    debugMessengerInfo.flags = VULKAN_NO_FLAGS;
+    debugMessengerInfo.flags = VKC_NO_FLAGS;
     debugMessengerInfo.pfnUserCallback = rei::vkc::debugCallback;
     debugMessengerInfo.sType = DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     debugMessengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
@@ -564,7 +560,7 @@ int main () {
     createInfo.ppEnabledLayerNames = validationLayers;
     #endif
 
-    VK_CHECK (vkCreateInstance (&createInfo, nullptr, &instance));
+    VKC_CHECK (vkCreateInstance (&createInfo, nullptr, &instance));
     rei::vkc::Context::loadInstance (instance);
   }
 
@@ -573,7 +569,7 @@ int main () {
     VkDebugUtilsMessengerCreateInfoEXT createInfo;
     createInfo.pNext = nullptr;
     createInfo.pUserData = nullptr;
-    createInfo.flags = VULKAN_NO_FLAGS;
+    createInfo.flags = VKC_NO_FLAGS;
     createInfo.pfnUserCallback = rei::vkc::debugCallback;
     createInfo.sType = DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
@@ -582,19 +578,19 @@ int main () {
     createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
     createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
 
-    VK_CHECK (vkCreateDebugUtilsMessengerEXT (instance, &createInfo, nullptr, &debugMessenger));
+    VKC_CHECK (vkCreateDebugUtilsMessengerEXT (instance, &createInfo, nullptr, &debugMessenger));
   }
   #endif
 
   { // Create window surface
     VkXcbSurfaceCreateInfoKHR createInfo;
     createInfo.pNext = nullptr;
-    createInfo.flags = VULKAN_NO_FLAGS;
+    createInfo.flags = VKC_NO_FLAGS;
     createInfo.window = window.handle;
     createInfo.connection = window.connection;
     createInfo.sType = XCB_SURFACE_CREATE_INFO_KHR;
 
-    VK_CHECK (vkCreateXcbSurfaceKHR (instance, &createInfo, nullptr, &windowSurface));
+    VKC_CHECK (vkCreateXcbSurfaceKHR (instance, &createInfo, nullptr, &windowSurface));
   }
 
   { // Choose physical device, create logical device
@@ -602,9 +598,9 @@ int main () {
     rei::vku::choosePhysicalDevice (instance, windowSurface, &indices, &physicalDevice);
 
     {
-      // Make sure that VULKAN_TEXTURE_FORMAT supports image blitting (which is needed for mipmap generation) on the chosen device
+      // Make sure that VKC_TEXTURE_FORMAT supports image blitting (which is needed for mipmap generation) on the chosen device
       VkFormatProperties formatProperties;
-      vkGetPhysicalDeviceFormatProperties (physicalDevice, VULKAN_TEXTURE_FORMAT, &formatProperties);
+      vkGetPhysicalDeviceFormatProperties (physicalDevice, VKC_TEXTURE_FORMAT, &formatProperties);
 
       VkFormatFeatureFlags requiredFlags = VK_FORMAT_FEATURE_BLIT_SRC_BIT;
       requiredFlags |= VK_FORMAT_FEATURE_BLIT_DST_BIT;
@@ -614,7 +610,7 @@ int main () {
 
     VkPhysicalDeviceFeatures enabledFeatures {};
 
-    Float32 queuePriority = 1.f;
+    f32 queuePriority = 1.f;
     // NOTE All required queues have the same index on my device,
     // so I need only one queue create info. Perhaps, I might
     // handle them more appropriately in the future (so that this can work on different devices),
@@ -631,9 +627,9 @@ int main () {
     createInfo.pQueueCreateInfos = &queueInfo;
     createInfo.pEnabledFeatures = &enabledFeatures;
     createInfo.ppEnabledExtensionNames = rei::vkc::requiredDeviceExtensions;
-    createInfo.enabledExtensionCount = ARRAY_SIZE (rei::vkc::requiredDeviceExtensions);
+    createInfo.enabledExtensionCount = REI_ARRAY_SIZE (rei::vkc::requiredDeviceExtensions);
 
-    VK_CHECK (vkCreateDevice (physicalDevice, &createInfo, nullptr, &device));
+    VKC_CHECK (vkCreateDevice (physicalDevice, &createInfo, nullptr, &device));
 
     rei::vkc::Context::loadDevice (device);
     vkGetDeviceQueue (device, queueFamilyIndex, 0, &presentQueue);
@@ -668,10 +664,10 @@ int main () {
     createInfo.device = device;
     createInfo.instance = instance;
     createInfo.physicalDevice = physicalDevice;
-    createInfo.vulkanApiVersion = VULKAN_VERSION;
+    createInfo.vulkanApiVersion = VKC_VERSION;
     createInfo.pVulkanFunctions = &vulkanFunctions;
 
-    VK_CHECK (vmaCreateAllocator (&createInfo, &allocator));
+    VKC_CHECK (vmaCreateAllocator (&createInfo, &allocator));
   }
 
   { // Create swapchain
@@ -690,7 +686,7 @@ int main () {
     VkAttachmentDescription attachments[2];
 
     // Color attachment
-    attachments[0].flags = VULKAN_NO_FLAGS;
+    attachments[0].flags = VKC_NO_FLAGS;
     attachments[0].format = swapchain.format;
     attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -701,8 +697,8 @@ int main () {
     attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
     // Depth attachment
-    attachments[1].flags = VULKAN_NO_FLAGS;
-    attachments[1].format = VULKAN_DEPTH_FORMAT;
+    attachments[1].flags = VKC_NO_FLAGS;
+    attachments[1].format = VKC_DEPTH_FORMAT;
     attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -733,11 +729,11 @@ int main () {
     createInfo.dependencyCount = 0;
     createInfo.pDependencies = nullptr;
 
-    VK_CHECK (vkCreateRenderPass (device, &createInfo, nullptr, &defaultRenderPass));
+    VKC_CHECK (vkCreateRenderPass (device, &createInfo, nullptr, &defaultRenderPass));
   }
 
   { // Create framebuffers
-    framebuffers = MALLOC (VkFramebuffer, swapchain.imagesCount);
+    framebuffers = REI_MALLOC (VkFramebuffer, swapchain.imagesCount);
 
     VkFramebufferCreateInfo createInfo {FRAMEBUFFER_CREATE_INFO};
     createInfo.layers = 1;
@@ -746,11 +742,11 @@ int main () {
     createInfo.width = swapchain.extent.width;
     createInfo.height = swapchain.extent.height;
 
-    for (Uint32 index = 0; index < swapchain.imagesCount; ++index) {
+    for (u32 index = 0; index < swapchain.imagesCount; ++index) {
       VkImageView attachments[2] {swapchain.views[index], swapchain.depthImage.view};
       createInfo.pAttachments = attachments;
 
-      VK_CHECK (vkCreateFramebuffer (device, &createInfo, nullptr, &framebuffers[index]));
+      VKC_CHECK (vkCreateFramebuffer (device, &createInfo, nullptr, &framebuffers[index]));
     }
   }
 
@@ -765,62 +761,61 @@ int main () {
     VkFenceCreateInfo fenceInfo {FENCE_CREATE_INFO};
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &transferContext.commandPool));
+    VKC_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &transferContext.commandPool));
 
     VkSemaphoreCreateInfo semaphoreInfo {SEMAPHORE_CREATE_INFO};
 
     bufferInfo.commandBufferCount = 1;
-    for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
+    for (u8 index = 0; index < REI_FRAMES_COUNT; ++index) {
       auto current = &frames[index];
-      VK_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &current->commandPool));
+      VKC_CHECK (vkCreateCommandPool (device, &poolInfo, nullptr, &current->commandPool));
 
       bufferInfo.commandPool = current->commandPool;
 
-      VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->compositionCmd));
-      VK_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->offscreenCmd));
-      VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current->compositionFence));
-      VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current->offscreenFence));
-      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->compositionSemaphore));
-      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->presentSemaphore));
-      VK_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->offscreenSemaphore));
+      VKC_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->compositionCmd));
+      VKC_CHECK (vkAllocateCommandBuffers (device, &bufferInfo, &current->offscreenCmd));
+      VKC_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &current->submitFence));
+      VKC_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->compositionSemaphore));
+      VKC_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->presentSemaphore));
+      VKC_CHECK (vkCreateSemaphore (device, &semaphoreInfo, nullptr, &current->offscreenSemaphore));
     }
 
-    fenceInfo.flags = VULKAN_NO_FLAGS;
-    VK_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &transferContext.fence));
+    fenceInfo.flags = VKC_NO_FLAGS;
+    VKC_CHECK (vkCreateFence (device, &fenceInfo, nullptr, &transferContext.fence));
   }
 
   { // Create main descriptor pool
     VkDescriptorPoolSize sizes[1];
-    sizes[0].descriptorCount = 1 + GBUFFER_ATTACHMENT_COUNT;
+    sizes[0].descriptorCount = 1 + REI_GB_ATTACHMENT_COUNT;
     sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
     VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
     createInfo.pPoolSizes = sizes;
-    createInfo.poolSizeCount = ARRAY_SIZE (sizes);
-    createInfo.maxSets = 1 + GBUFFER_ATTACHMENT_COUNT;
+    createInfo.poolSizeCount = REI_ARRAY_SIZE (sizes);
+    createInfo.maxSets = 1 + REI_GB_ATTACHMENT_COUNT;
     createInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
-    VK_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &mainDescriptorPool));
+    VKC_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &mainDescriptorPool));
   }
 
   { // Create/load pipeline cache
     VkPipelineCacheCreateInfo createInfo {PIPELINE_CACHE_CREATE_INFO};
     rei::File cacheFile;
-    auto result = rei::readFile ("pipeline.cache", True, &cacheFile);
+    auto result = rei::readFile ("pipeline.cache", REI_TRUE, &cacheFile);
 
     switch (result) {
       case rei::Result::Success: {
-	LOGS_INFO ("Reusing pipeline cache...");
+	REI_LOGS_INFO ("Reusing pipeline cache...");
         createInfo.initialDataSize = cacheFile.size;
 	createInfo.pInitialData = cacheFile.contents;
       } break;
 
       default: {
-	LOGS_INFO ("Failed to obtain pipeline cache data, creating one from scratch");
+	REI_LOGS_INFO ("Failed to obtain pipeline cache data, creating one from scratch");
       } break;
     }
 
-    VK_CHECK (vkCreatePipelineCache (device, &createInfo, nullptr, &pipelineCache));
+    VKC_CHECK (vkCreatePipelineCache (device, &createInfo, nullptr, &pipelineCache));
     if (cacheFile.contents) free (cacheFile.contents);
   }
 
@@ -849,12 +844,13 @@ int main () {
   rei::gltf::load (device, allocator, &transferContext, "assets/models/sponza-scene/Sponza.gltf", &sponza);
   sponza.initDescriptors (device, gbuffer.geometryPass.descriptorLayout);
 
-  Float32 lastTime = 0.f;
-  Float32 deltaTime = 0.f;
-  const Float32 defaultDelta = 1.f / 60.f;
+  f32 lastTime = 0.f;
+  f32 deltaTime = 0.f;
+  const f32 defaultDelta = 1.f / 60.f;
 
   xcb_generic_event_t* event = nullptr;
 
+  // Render loop invariants
   VkCommandBufferBeginInfo cmdBeginInfo;
   cmdBeginInfo.pNext = nullptr;
   cmdBeginInfo.pInheritanceInfo = nullptr;
@@ -869,7 +865,7 @@ int main () {
   offscreenBeginInfo.renderPass = gbuffer.geometryPass.renderPass;
   offscreenBeginInfo.framebuffer = gbuffer.geometryPass.framebuffer;
   offscreenBeginInfo.pClearValues = gbuffer.geometryPass.clearValues;
-  offscreenBeginInfo.clearValueCount = ARRAY_SIZE (gbuffer.geometryPass.clearValues);
+  offscreenBeginInfo.clearValueCount = REI_ARRAY_SIZE (gbuffer.geometryPass.clearValues);
 
   VkRenderPassBeginInfo compositionBeginInfo;
   compositionBeginInfo.pNext = nullptr;
@@ -878,7 +874,7 @@ int main () {
   compositionBeginInfo.renderPass = defaultRenderPass;
   compositionBeginInfo.renderArea.extent = swapchain.extent;
   compositionBeginInfo.pClearValues = gbuffer.lightPass.clearValues;
-  compositionBeginInfo.clearValueCount = ARRAY_SIZE (gbuffer.lightPass.clearValues);
+  compositionBeginInfo.clearValueCount = REI_ARRAY_SIZE (gbuffer.lightPass.clearValues);
 
   LightPassPushConstants lightPushConstants;
   lightPushConstants.target = 0;
@@ -898,16 +894,16 @@ int main () {
   lightPushConstants.light.colorRadius.z = 31.f / 255.f;
   lightPushConstants.light.colorRadius.w = 0.5f;
 
-  VkPipelineStageFlags pipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  const VkPipelineStageFlags pipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
   for (;;) {
-    camera.firstMouse = True;
-    Float32 currentTime = rei::Timer::getCurrentTime ();
+    camera.firstMouse = REI_TRUE;
+    f32 currentTime = rei::Timer::getCurrentTime ();
     deltaTime = currentTime - lastTime;
     lastTime = currentTime;
 
     // NOTE IMGUI asserts that deltaTime > 0.f, hence this check.
-    Float32 imguiDeltaTime[2] {defaultDelta, deltaTime};
+    f32 imguiDeltaTime[] {defaultDelta, deltaTime};
     ImGui::GetIO().DeltaTime = imguiDeltaTime[deltaTime > 0.f];
 
     while ((event = xcb_poll_for_event (window.connection))) {
@@ -926,7 +922,7 @@ int main () {
 
         case XCB_MOTION_NOTIFY: {
           const auto data = (const xcb_motion_notify_event_t*) event;
-          camera.handleMouseMovement ((Float32) data->event_x, (Float32) data->event_y);
+          camera.handleMouseMovement ((f32) data->event_x, (f32) data->event_y);
         } break;
 
         default: break;
@@ -937,21 +933,19 @@ int main () {
       free (event);
     }
 
-    frameIndex %= FRAMES_COUNT;
+    frameIndex %= REI_FRAMES_COUNT;
     const auto currentFrame = &frames[frameIndex];
     auto offscreenCmd = currentFrame->offscreenCmd;
     auto compositionCmd = currentFrame->compositionCmd;
 
-    VkFence fences[2] {currentFrame->compositionFence, currentFrame->offscreenFence};
+    VKC_CHECK (vkWaitForFences (device, 1, &currentFrame->submitFence, VK_TRUE, ~0ull));
+    VKC_CHECK (vkResetFences (device, 1, &currentFrame->submitFence));
 
-    VK_CHECK (vkWaitForFences (device, 2, fences, VK_TRUE, ~0ull));
-    VK_CHECK (vkResetFences (device, 2, fences));
-
-    Uint32 imageIndex = 0;
-    VKC_GET_NEXT_IMAGE (device, swapchain, currentFrame->presentSemaphore, &imageIndex);
+    u32 currentImage = 0;
+    VKC_GET_NEXT_IMAGE (device, swapchain, currentFrame->presentSemaphore, &currentImage);
 
     // Geometry pass of deferred renderer
-    VK_CHECK (vkBeginCommandBuffer (offscreenCmd, &cmdBeginInfo));
+    VKC_CHECK (vkBeginCommandBuffer (offscreenCmd, &cmdBeginInfo));
     vkCmdBeginRenderPass (offscreenCmd, &offscreenBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline (offscreenCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer.geometryPass.pipeline);
 
@@ -967,7 +961,7 @@ int main () {
     }
 
     vkCmdEndRenderPass (offscreenCmd);
-    VK_CHECK (vkEndCommandBuffer (offscreenCmd));
+    VKC_CHECK (vkEndCommandBuffer (offscreenCmd));
 
     { // Submit written commands to a queue
       VkSubmitInfo submitInfo;
@@ -981,13 +975,13 @@ int main () {
       submitInfo.pWaitSemaphores = &currentFrame->presentSemaphore;
       submitInfo.pSignalSemaphores = &currentFrame->offscreenSemaphore;
 
-      VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->offscreenFence));
+      VKC_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
     }
 
-    VK_CHECK (vkBeginCommandBuffer (compositionCmd, &cmdBeginInfo));
+    VKC_CHECK (vkBeginCommandBuffer (compositionCmd, &cmdBeginInfo));
 
     // Light pass of deferred renderer
-    compositionBeginInfo.framebuffer = framebuffers[imageIndex];
+    compositionBeginInfo.framebuffer = framebuffers[currentImage];
     vkCmdBeginRenderPass (compositionCmd, &compositionBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline (compositionCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer.lightPass.pipeline);
 
@@ -1012,7 +1006,7 @@ int main () {
     imguiContext.renderDrawData (compositionCmd, frameIndex, drawData);
 
     vkCmdEndRenderPass (compositionCmd);
-    VK_CHECK (vkEndCommandBuffer (compositionCmd));
+    VKC_CHECK (vkEndCommandBuffer (compositionCmd));
 
     { // Submit written commands to a queue
       VkSubmitInfo submitInfo;
@@ -1026,7 +1020,7 @@ int main () {
       submitInfo.pWaitSemaphores = &currentFrame->offscreenSemaphore;
       submitInfo.pSignalSemaphores = &currentFrame->compositionSemaphore;
 
-      VK_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->compositionFence));
+      VKC_CHECK (vkQueueSubmit (graphicsQueue, 1, &submitInfo, currentFrame->submitFence));
     }
 
     // Present resulting image
@@ -1036,11 +1030,11 @@ int main () {
     presentInfo.swapchainCount = 1;
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.sType = PRESENT_INFO_KHR;
-    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pImageIndices = &currentImage;
     presentInfo.pSwapchains = &swapchain.handle;
     presentInfo.pWaitSemaphores = &currentFrame->compositionSemaphore;
 
-    VK_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
+    VKC_CHECK (vkQueuePresentKHR (presentQueue, &presentInfo));
     ++frameIndex;
   }
 
@@ -1055,15 +1049,12 @@ RESOURCE_CLEANUP:
 
   { // Save pipeline cache for future reuse
     size_t size = 0;
-    VK_CHECK (vkGetPipelineCacheData (device, pipelineCache, &size, nullptr));
+    VKC_CHECK (vkGetPipelineCacheData (device, pipelineCache, &size, nullptr));
 
-    Uint8* data = MALLOC (Uint8, size);
-    VK_CHECK (vkGetPipelineCacheData (device, pipelineCache, &size, data));
+    u8* data = REI_MALLOC (u8, size);
+    VKC_CHECK (vkGetPipelineCacheData (device, pipelineCache, &size, data));
 
-    FILE* cacheFile = fopen ("pipeline.cache", "wb");
-    fwrite (data, 1, size, cacheFile);
-    fclose (cacheFile);
-
+    rei::writeFile ("pipeline.cache", REI_TRUE, data, size);
     free (data);
     vkDestroyPipelineCache (device, pipelineCache, nullptr);
   }
@@ -1073,17 +1064,16 @@ RESOURCE_CLEANUP:
   vkDestroyFence (device, transferContext.fence, nullptr);
   vkDestroyCommandPool (device, transferContext.commandPool, nullptr);
 
-  for (Uint8 index = 0; index < FRAMES_COUNT; ++index) {
+  for (u8 index = 0; index < REI_FRAMES_COUNT; ++index) {
     auto current = &frames[index];
     vkDestroySemaphore (device, current->offscreenSemaphore, nullptr);
     vkDestroySemaphore (device, current->presentSemaphore, nullptr);
     vkDestroySemaphore (device, current->compositionSemaphore, nullptr);
-    vkDestroyFence (device, current->offscreenFence, nullptr);
-    vkDestroyFence (device, current->compositionFence, nullptr);
+    vkDestroyFence (device, current->submitFence, nullptr);
     vkDestroyCommandPool (device, current->commandPool, nullptr);
   }
 
-  for (Uint32 index = 0; index < swapchain.imagesCount; ++index)
+  for (u32 index = 0; index < swapchain.imagesCount; ++index)
     vkDestroyFramebuffer (device, framebuffers[index], nullptr);
 
   free (framebuffers);

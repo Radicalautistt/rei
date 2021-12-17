@@ -13,9 +13,9 @@ struct Material {
 
 // This is used to group multiple primitives with the same material
 struct Batch {
-  Uint32 firstIndex;
-  Uint32 indexCount;
-  Uint32 materialIndex;
+  u32 firstIndex;
+  u32 indexCount;
+  u32 materialIndex;
 };
 
 struct Model {
@@ -36,7 +36,7 @@ struct Model {
   math::Matrix4 modelMatrix;
 
   void initDescriptors (VkDevice device, VkDescriptorSetLayout descriptorLayout);
-  void draw (VkCommandBuffer commandBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection);
+  void draw (VkCommandBuffer cmdBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection);
 };
 
 void load (

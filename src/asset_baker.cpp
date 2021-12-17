@@ -14,7 +14,7 @@
 namespace rei::assets {
 
 void bakeImage (const char* relativePath) {
-  Int32 width, height, channels;
+  i32 width, height, channels;
   auto pixels = stbi_load (relativePath, &width, &height, &channels, STBI_rgb_alpha);
   REI_ASSERT (pixels);
 
@@ -25,11 +25,11 @@ void bakeImage (const char* relativePath) {
 
   FILE* outputFile = fopen (outputPath, "wb");
 
-  Int32 imageSize = width * height * 4;
-  Int32 compressedBound = LZ4_compressBound (imageSize);
-  char* compressed = MALLOC (char, compressedBound);
+  i32 imageSize = width * height * 4;
+  i32 compressedBound = LZ4_compressBound (imageSize);
+  char* compressed = REI_MALLOC (char, compressedBound);
 
-  Int32 compressedActual = LZ4_compress_default (
+  i32 compressedActual = LZ4_compress_default (
     (const char*) pixels,
     compressed,
     imageSize,
@@ -40,7 +40,7 @@ void bakeImage (const char* relativePath) {
 
   if (compressedActual < compressedBound) {
     char* temp = compressed;
-    compressed = MALLOC (char, compressedActual);
+    compressed = REI_MALLOC (char, compressedActual);
     memcpy (compressed, temp, compressedActual);
     free (temp);
   }
@@ -98,7 +98,7 @@ Result readImage (const char* relativePath, vku::TextureAllocationInfo* output) 
   size_t metadataSize = 0;
   fread (&metadataSize, sizeof (size_t), 1, assetFile);
 
-  char* metadata = ALLOCA (char, metadataSize);
+  char* metadata = REI_ALLOCA (char, metadataSize);
   fread (metadata, 1, metadataSize, assetFile);
   metadata[metadataSize] = '\0';
 
@@ -109,7 +109,7 @@ Result readImage (const char* relativePath, vku::TextureAllocationInfo* output) 
   output->height = parsedMetadata["height"].GetUint ();
   output->compressedSize = (size_t) parsedMetadata["compressedSize"].GetUint64 ();
 
-  output->pixels = MALLOC (char, output->compressedSize);
+  output->pixels = REI_MALLOC (char, output->compressedSize);
   fread (output->pixels, 1, output->compressedSize, assetFile);
 
   fclose (assetFile);

@@ -12,15 +12,15 @@ void Timer::init () noexcept {
   gettimeofday (&Timer::start, nullptr);
 }
 
-Float32 Timer::getCurrentTime () noexcept {
+f32 Timer::getCurrentTime () noexcept {
   timeval now;
   gettimeofday (&now, nullptr);
-  return (Float32) ((now.tv_sec - start.tv_sec) * 1000 + (now.tv_usec - start.tv_usec) / 1000) / 1000.f;
+  return (f32) ((now.tv_sec - start.tv_sec) * 1000 + (now.tv_usec - start.tv_usec) / 1000) / 1000.f;
 }
 
 void logger (LogLevel level, const char* format, ...) {
-  static char colors[3][10] {ANSI_GREEN, ANSI_RED, ANSI_YELLOW};
-  static char names[3][11] {"[INFO]    ", "[ERROR]   ", "[WARNING] "};
+  static const char colors[][10] {ANSI_GREEN, ANSI_RED, ANSI_YELLOW};
+  static const char names[][11] {"[INFO]    ", "[ERROR]   ", "[WARNING] "};
 
   printf ("%s%s", colors[level], names[level]);
 
@@ -41,7 +41,13 @@ const char* getError (Result result) noexcept {
   }
 }
 
-Result readFile (const char* relativePath, Bool binary, File* output) {
+void writeFile (const char* relativePath, b8 binary, void* data, size_t size) {
+  FILE* out = fopen (relativePath, binary ? "wb" : "w");
+  fwrite (data, 1, size, out);
+  fclose (out);
+}
+
+Result readFile (const char* relativePath, b8 binary, File* output) {
   FILE* file = fopen (relativePath, binary ? "rb" : "r");
   if (!file) return Result::FileDoesNotExist;
 

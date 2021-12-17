@@ -13,19 +13,19 @@ PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = nullptr;
 
 namespace rei::vkc {
 
-void* Context::library = nullptr;
+void* Context::handle = nullptr;
 
 void Context::init () {
-  LOGS_INFO ("Loading Vulkan functions from " ANSI_YELLOW "libvulkan.so.1");
-  library = dlopen ("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
-  if (!library) {
-    LOGS_WARNING ("Failed, going with " ANSI_RED "libvulkan.so" ANSI_YELLOW " instead");
-    library = dlopen ("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+  REI_LOGS_INFO ("Loading Vulkan functions from " ANSI_YELLOW "libvulkan.so.1");
+  handle = dlopen ("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+  if (!handle) {
+    REI_LOGS_WARN ("Failed, going with " ANSI_RED "libvulkan.so" ANSI_YELLOW " instead");
+    handle = dlopen ("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
   }
 
-  REI_ASSERT (library);
+  REI_ASSERT (handle);
 
-  vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) dlsym (library, "vkGetInstanceProcAddr");
+  vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) dlsym (handle, "vkGetInstanceProcAddr");
 
   // Load global functions
   #define X(name) name = (PFN_##name) vkGetInstanceProcAddr (nullptr, #name);
@@ -34,7 +34,7 @@ void Context::init () {
 }
 
 void Context::shutdown () {
-  dlclose (library);
+  dlclose (handle);
 }
 
 void Context::loadInstance (VkInstance instance) {
@@ -92,10 +92,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback (
   (void) userData;
 
   if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-    LOG_ERROR ("%s\n", callbackData->pMessage);
+    REI_LOG_ERROR ("%s\n", callbackData->pMessage);
 
   if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-    LOG_WARNING ("%s\n", callbackData->pMessage);
+    REI_LOG_WARN ("%s\n", callbackData->pMessage);
 
   return VK_FALSE;
 }

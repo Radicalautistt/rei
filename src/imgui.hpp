@@ -36,22 +36,22 @@ struct Context {
   VkSampler fontSampler;
 
   xcb::Window* window;
-  vku::Buffer indexBuffers[FRAMES_COUNT];
-  vku::Buffer vertexBuffers[FRAMES_COUNT];
+  vku::Buffer indexBuffers[REI_FRAMES_COUNT];
+  vku::Buffer vertexBuffers[REI_FRAMES_COUNT];
 
   vku::Image fontTexture;
-  Bool32 mouseButtonsDown[2];
+  b32 mouseButtonsDown[2];
 
   void newFrame ();
-  void updateBuffers (Uint32 frameIndex, const ImDrawData* drawData);
+  void updateBuffers (u32 frameIndex, const ImDrawData* drawData);
   void handleEvents (const xcb_generic_event_t* event);
-  void renderDrawData (VkCommandBuffer cmdBuffer, Uint32 frameIndex, const ImDrawData* drawData);
+  void renderDrawData (VkCommandBuffer cmdBuffer, u32 frameIndex, const ImDrawData* drawData);
 };
 
 void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* createInfo, Context* output);
 void destroy (VkDevice device, Context* context);
 
-void showDebugWindow (Float32* cameraSpeed, Uint32* gbufferOutput, VmaAllocator allocator);
+void showDebugWindow (f32* cameraSpeed, u32* gbufferOutput, VmaAllocator allocator);
 
 };
 

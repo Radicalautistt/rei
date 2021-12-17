@@ -9,72 +9,72 @@
 
 namespace rei::vku {
 
-void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices* output) {
-  output->haveGraphics = output->havePresent = output->haveTransfer = output->haveCompute = False;
+void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices* out) {
+  out->haveGraphics = out->havePresent = out->haveTransfer = out->haveCompute = REI_FALSE;
 
-  Uint32 count = 0;
+  u32 count = 0;
   vkGetPhysicalDeviceQueueFamilyProperties (physicalDevice, &count, nullptr);
 
-  auto available = ALLOCA (VkQueueFamilyProperties, count);
+  auto available = REI_ALLOCA (VkQueueFamilyProperties, count);
   vkGetPhysicalDeviceQueueFamilyProperties (physicalDevice, &count, available);
 
-  for (Uint32 index = 0; index < count; ++index) {
+  for (u32 index = 0; index < count; ++index) {
     auto current = &available[index];
 
     if (current->queueCount) {
       VkBool32 supportsPresentation = VK_FALSE;
-      VK_CHECK (vkGetPhysicalDeviceSurfaceSupportKHR (physicalDevice, index, targetSurface, &supportsPresentation));
+      VKC_CHECK (vkGetPhysicalDeviceSurfaceSupportKHR (physicalDevice, index, targetSurface, &supportsPresentation));
 
       if (supportsPresentation) {
-	output->havePresent = True;
-	output->present = index;
+	out->havePresent = REI_TRUE;
+	out->present = index;
       }
 
       if (current->queueFlags & VK_QUEUE_COMPUTE_BIT) {
-	output->haveCompute = True;
-        output->compute = index;
+	out->haveCompute = REI_TRUE;
+        out->compute = index;
       }
 
       if (current->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-	output->haveGraphics = True;
-	output->graphics = index;
+	out->haveGraphics = REI_TRUE;
+	out->graphics = index;
       }
 
       if (current->queueFlags & VK_QUEUE_TRANSFER_BIT) {
-        output->haveTransfer = True;
-	output->transfer = index;
+        out->haveTransfer = REI_TRUE;
+	out->transfer = index;
       }
 
-      if (output->haveGraphics && output->havePresent && output->haveTransfer && output->haveCompute)
+      if (out->haveGraphics && out->havePresent && out->haveTransfer && out->haveCompute)
 	break;
     }
   }
 }
 
-void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, QueueFamilyIndices* outputIndices, VkPhysicalDevice* output) {
-  Uint32 count = 0;
-  VK_CHECK (vkEnumeratePhysicalDevices (instance, &count, nullptr));
+void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, QueueFamilyIndices* outputIndices, VkPhysicalDevice* out) {
+  u32 count = 0;
+  VKC_CHECK (vkEnumeratePhysicalDevices (instance, &count, nullptr));
 
-  auto available = ALLOCA (VkPhysicalDevice, count);
-  VK_CHECK (vkEnumeratePhysicalDevices (instance, &count, available));
+  auto available = REI_ALLOCA (VkPhysicalDevice, count);
+  VKC_CHECK (vkEnumeratePhysicalDevices (instance, &count, available));
 
-  for (Uint32 index = 0; index < count; ++index) {
+  for (u32 index = 0; index < count; ++index) {
     auto current = available[index];
-    Bool supportsExtensions, supportsSwapchain = False;
+    b8 supportsExtensions, supportsSwapchain = REI_FALSE;
 
     { // Check support for required extensions
-      Uint32 extensionsCount = 0;
-      VK_CHECK (vkEnumerateDeviceExtensionProperties (current, nullptr, &extensionsCount, nullptr));
+      u32 extensionsCount = 0;
+      VKC_CHECK (vkEnumerateDeviceExtensionProperties (current, nullptr, &extensionsCount, nullptr));
 
-      auto availableExtensions = ALLOCA (VkExtensionProperties, extensionsCount);
-      VK_CHECK (vkEnumerateDeviceExtensionProperties (current, nullptr, &extensionsCount, availableExtensions));
+      auto availableExtensions = REI_ALLOCA (VkExtensionProperties, extensionsCount);
+      VKC_CHECK (vkEnumerateDeviceExtensionProperties (current, nullptr, &extensionsCount, availableExtensions));
 
-      for (Uint32 required = 0; required < ARRAY_SIZE (vkc::requiredDeviceExtensions); ++required) {
-	supportsExtensions = False;
+      for (u32 required = 0; required < REI_ARRAY_SIZE (vkc::requiredDeviceExtensions); ++required) {
+	supportsExtensions = REI_FALSE;
 
-	for (Uint32 present = 0; present < extensionsCount; ++present) {
+	for (u32 present = 0; present < extensionsCount; ++present) {
 	  if (!strcmp (availableExtensions[present].extensionName, vkc::requiredDeviceExtensions[required])) {
-	    supportsExtensions = True;
+	    supportsExtensions = REI_TRUE;
 	    break;
 	  }
 	}
@@ -82,36 +82,31 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
     }
 
     if (supportsExtensions) {
-      Uint32 formatsCount = 0, presentModesCount = 0;
-      VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (current, targetSurface, &formatsCount, nullptr));
-      VK_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (current, targetSurface, &presentModesCount, nullptr));
+      u32 formatsCount = 0, presentModesCount = 0;
+      VKC_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (current, targetSurface, &formatsCount, nullptr));
+      VKC_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (current, targetSurface, &presentModesCount, nullptr));
 
       supportsSwapchain = formatsCount && presentModesCount;
     }
 
     findQueueFamilyIndices (current, targetSurface, outputIndices);
 
-    Bool hasQueueFamilies =
+    b8 hasQueueFamilies =
       outputIndices->haveGraphics &&
       outputIndices->havePresent &&
       outputIndices->haveTransfer &&
       outputIndices->haveCompute;
 
     if (hasQueueFamilies && supportsSwapchain) {
-      *output = current;
+      *out = current;
       break;
     }
   }
 
-  REI_ASSERT (*output);
+  REI_ASSERT (*out);
 }
 
-void createAttachment (
-  VkDevice device,
-  VmaAllocator allocator,
-  const AttachmentCreateInfo* createInfo,
-  Image* output) {
-
+void createAttachment (VkDevice device, VmaAllocator allocator, const AttachmentCreateInfo* createInfo, Image* out) {
   {
     VkImageCreateInfo info {IMAGE_CREATE_INFO};
     info.mipLevels = 1;
@@ -131,18 +126,18 @@ void createAttachment (
     allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-    VK_CHECK (vmaCreateImage (
+    VKC_CHECK (vmaCreateImage (
       allocator,
       &info,
       &allocationInfo,
-      &output->handle,
-      &output->allocation,
+      &out->handle,
+      &out->allocation,
       nullptr
     ));
   }
 
   VkImageViewCreateInfo info {IMAGE_VIEW_CREATE_INFO};
-  info.image = output->handle;
+  info.image = out->handle;
   info.format = createInfo->format;
   info.viewType = VK_IMAGE_VIEW_TYPE_2D;
 
@@ -152,48 +147,48 @@ void createAttachment (
   info.subresourceRange.baseArrayLayer = 0;
   info.subresourceRange.aspectMask = createInfo->aspectMask;
 
-  VK_CHECK (vkCreateImageView (device, &info, nullptr, &output->view));
+  VKC_CHECK (vkCreateImageView (device, &info, nullptr, &out->view));
 }
 
-void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) {
+void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* out) {
   {
     // Choose swapchain extent
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
-    VK_CHECK (vkGetPhysicalDeviceSurfaceCapabilitiesKHR (createInfo->physicalDevice, createInfo->windowSurface, &surfaceCapabilities));
+    VKC_CHECK (vkGetPhysicalDeviceSurfaceCapabilitiesKHR (createInfo->physicalDevice, createInfo->windowSurface, &surfaceCapabilities));
 
     if (surfaceCapabilities.currentExtent.width != UINT32_MAX) {
-      output->extent = surfaceCapabilities.currentExtent;
+      out->extent = surfaceCapabilities.currentExtent;
     } else {
-      output->extent.width = CLAMP (
-        (Uint32) createInfo->window->width,
+      out->extent.width = REI_CLAMP (
+        (u32) createInfo->window->width,
         surfaceCapabilities.minImageExtent.width,
         surfaceCapabilities.maxImageExtent.width
       );
 
-      output->extent.height = CLAMP (
-        (Uint32) createInfo->window->height,
+      out->extent.height = REI_CLAMP (
+        (u32) createInfo->window->height,
         surfaceCapabilities.minImageExtent.height,
         surfaceCapabilities.maxImageExtent.height
       );
     }
 
-    Uint32 minImagesCount = surfaceCapabilities.minImageCount + 1;
+    u32 minImagesCount = surfaceCapabilities.minImageCount + 1;
     if (surfaceCapabilities.maxImageCount && minImagesCount > surfaceCapabilities.maxImageCount)
       minImagesCount = surfaceCapabilities.maxImageCount;
 
     // Choose surface format
     VkSurfaceFormatKHR surfaceFormat;
     {
-      Uint32 count = 0;
-      VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, nullptr));
+      u32 count = 0;
+      VKC_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, nullptr));
 
-      auto available = ALLOCA (VkSurfaceFormatKHR, count);
-      VK_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, available));
+      auto available = REI_ALLOCA (VkSurfaceFormatKHR, count);
+      VKC_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, available));
 
       surfaceFormat = available[0];
-      for (Uint32 index = 0; index < count; ++index) {
-        Bool rgba8 = available[index].format == VULKAN_TEXTURE_FORMAT;
-        Bool nonLinear = available[index].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      for (u32 index = 0; index < count; ++index) {
+        b8 rgba8 = available[index].format == VKC_TEXTURE_FORMAT;
+        b8 nonLinear = available[index].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
         if (rgba8 && nonLinear) {
           surfaceFormat = available[index];
@@ -202,18 +197,18 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
       }
     }
 
-    output->format = surfaceFormat.format;
+    out->format = surfaceFormat.format;
 
     // Choose present mode
     VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
     {
-      Uint32 count = 0;
-      VK_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, nullptr));
+      u32 count = 0;
+      VKC_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, nullptr));
 
-      auto available = ALLOCA (VkPresentModeKHR, count);
-      VK_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, available));
+      auto available = REI_ALLOCA (VkPresentModeKHR, count);
+      VKC_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, available));
 
-      for (Uint32 index = 0; index < count; ++index) {
+      for (u32 index = 0; index < count; ++index) {
         if (available[index] == VK_PRESENT_MODE_MAILBOX_KHR) {
           presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 	  break;
@@ -228,7 +223,7 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
     info.oldSwapchain = createInfo->oldSwapchain;
 
     info.imageArrayLayers = 1;
-    info.imageExtent = output->extent;
+    info.imageExtent = out->extent;
     info.minImageCount = minImagesCount;
     info.imageFormat = surfaceFormat.format;
     info.imageColorSpace = surfaceFormat.colorSpace;
@@ -238,16 +233,16 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
     info.preTransform = surfaceCapabilities.currentTransform;
     info.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
 
-    VK_CHECK (vkCreateSwapchainKHR (createInfo->device, &info, nullptr, &output->handle));
+    VKC_CHECK (vkCreateSwapchainKHR (createInfo->device, &info, nullptr, &out->handle));
   }
 
   { // Create swapchain images and views
-    vkGetSwapchainImagesKHR (createInfo->device, output->handle, &output->imagesCount, nullptr);
+    vkGetSwapchainImagesKHR (createInfo->device, out->handle, &out->imagesCount, nullptr);
 
-    output->images = MALLOC (VkImage, output->imagesCount);
-    vkGetSwapchainImagesKHR (createInfo->device, output->handle, &output->imagesCount, output->images);
+    out->images = REI_MALLOC (VkImage, out->imagesCount);
+    vkGetSwapchainImagesKHR (createInfo->device, out->handle, &out->imagesCount, out->images);
 
-    output->views = MALLOC (VkImageView, output->imagesCount);
+    out->views = REI_MALLOC (VkImageView, out->imagesCount);
 
     VkImageSubresourceRange subresourceRange;
     subresourceRange.levelCount = 1;
@@ -256,33 +251,33 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output) 
     subresourceRange.baseArrayLayer = 0;
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    for (Uint32 index = 0; index < output->imagesCount; ++index) {
+    for (u32 index = 0; index < out->imagesCount; ++index) {
       VkImageViewCreateInfo info {IMAGE_VIEW_CREATE_INFO};
-      info.format = output->format;
-      info.image = output->images[index];
+      info.format = out->format;
+      info.image = out->images[index];
       info.viewType = VK_IMAGE_VIEW_TYPE_2D;
       info.subresourceRange = subresourceRange;
 
-      VK_CHECK (vkCreateImageView (createInfo->device, &info, nullptr, &output->views[index]));
+      VKC_CHECK (vkCreateImageView (createInfo->device, &info, nullptr, &out->views[index]));
     }
   }
 
   // Create depth image
   AttachmentCreateInfo info;
-  info.format = VULKAN_DEPTH_FORMAT;
-  info.width = output->extent.width;
-  info.height = output->extent.height;
+  info.format = VKC_DEPTH_FORMAT;
+  info.width = out->extent.width;
+  info.height = out->extent.height;
   info.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
   info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-  createAttachment (createInfo->device, createInfo->allocator, &info, &output->depthImage);
+  createAttachment (createInfo->device, createInfo->allocator, &info, &out->depthImage);
 }
 
 void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain* swapchain) {
   vkDestroyImageView (device, swapchain->depthImage.view, nullptr);
   vmaDestroyImage (allocator, swapchain->depthImage.handle, swapchain->depthImage.allocation);
 
-  for (Uint32 index = 0; index < swapchain->imagesCount; ++index)
+  for (u32 index = 0; index < swapchain->imagesCount; ++index)
     vkDestroyImageView (device, swapchain->views[index], nullptr);
 
   free (swapchain->views);
@@ -291,19 +286,19 @@ void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain* swapc
   vkDestroySwapchainKHR (device, swapchain->handle, nullptr);
 }
 
-void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule* output) {
+void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule* out) {
   File shaderFile;
-  REI_CHECK (readFile (relativePath, True, &shaderFile));
+  REI_CHECK (readFile (relativePath, REI_TRUE, &shaderFile));
 
   VkShaderModuleCreateInfo createInfo {SHADER_MODULE_CREATE_INFO};
   createInfo.codeSize = shaderFile.size;
-  createInfo.pCode = (Uint32*) shaderFile.contents;
+  createInfo.pCode = (u32*) shaderFile.contents;
 
-  VK_CHECK (vkCreateShaderModule (device, &createInfo, nullptr, output));
+  VKC_CHECK (vkCreateShaderModule (device, &createInfo, nullptr, out));
   free (shaderFile.contents);
 }
 
-void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* createInfo, VkPipeline* output) {
+void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* createInfo, VkPipeline* out) {
   VkPipelineInputAssemblyStateCreateInfo inputAssemblyState {PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
   inputAssemblyState.primitiveRestartEnable = VK_FALSE;
   inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -314,7 +309,7 @@ void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* 
 
   VkPipelineColorBlendStateCreateInfo colorBlendState {PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
   colorBlendState.pAttachments = createInfo->colorBlendAttachment;
-  colorBlendState.attachmentCount = (Uint32) createInfo->colorBlendAttachmentCount;
+  colorBlendState.attachmentCount = (u32) createInfo->colorBlendAttachmentCount;
 
   VkShaderModule vertexShader, pixelShader;
   createShaderModule (device, createInfo->vertexShaderPath, &vertexShader);
@@ -324,7 +319,7 @@ void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* 
   shaderStages[0].pName = "main";
   shaderStages[0].pNext = nullptr;
   shaderStages[0].module = vertexShader;
-  shaderStages[0].flags = VULKAN_NO_FLAGS;
+  shaderStages[0].flags = VKC_NO_FLAGS;
   shaderStages[0].pSpecializationInfo = nullptr;
   shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
   shaderStages[0].sType = PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -332,7 +327,7 @@ void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* 
   shaderStages[1].pName = "main";
   shaderStages[1].pNext = nullptr;
   shaderStages[1].module = pixelShader;
-  shaderStages[1].flags = VULKAN_NO_FLAGS;
+  shaderStages[1].flags = VKC_NO_FLAGS;
   shaderStages[1].pSpecializationInfo = nullptr;
   shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
   shaderStages[1].sType = PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -340,7 +335,7 @@ void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* 
   VkGraphicsPipelineCreateInfo info {GRAPHICS_PIPELINE_CREATE_INFO};
   info.layout = createInfo->layout;
   info.renderPass = createInfo->renderPass;
-  info.stageCount = ARRAY_SIZE (shaderStages);
+  info.stageCount = REI_ARRAY_SIZE (shaderStages);
 
   info.pStages = shaderStages;
   info.pColorBlendState = &colorBlendState;
@@ -352,71 +347,71 @@ void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* 
   info.pDepthStencilState = createInfo->depthStencilState;
   info.pRasterizationState = createInfo->rasterizationState;
 
-  VK_CHECK (vkCreateGraphicsPipelines (device, createInfo->cache, 1, &info, nullptr, output));
+  VKC_CHECK (vkCreateGraphicsPipelines (device, createInfo->cache, 1, &info, nullptr, out));
 
   vkDestroyShaderModule (device, pixelShader, nullptr);
   vkDestroyShaderModule (device, vertexShader, nullptr);
 }
 
 VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool) {
-  VkCommandBuffer commandBuffer;
+  VkCommandBuffer cmdBuffer;
 
   VkCommandBufferAllocateInfo allocationInfo {COMMAND_BUFFER_ALLOCATE_INFO};
   allocationInfo.commandBufferCount = 1;
   allocationInfo.commandPool = commandPool;
 
-  VK_CHECK (vkAllocateCommandBuffers (device, &allocationInfo, &commandBuffer));
+  VKC_CHECK (vkAllocateCommandBuffers (device, &allocationInfo, &cmdBuffer));
 
   VkCommandBufferBeginInfo beginInfo {COMMAND_BUFFER_BEGIN_INFO};
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-  VK_CHECK (vkBeginCommandBuffer (commandBuffer, &beginInfo));
-  return commandBuffer;
+  VKC_CHECK (vkBeginCommandBuffer (cmdBuffer, &beginInfo));
+  return cmdBuffer;
 }
 
-void submitImmediateCommand (VkDevice device, const TransferContext* transferContext, VkCommandBuffer commandBuffer) {
-  VK_CHECK (vkEndCommandBuffer (commandBuffer));
+void submitImmediateCommand (VkDevice device, const TransferContext* transferContext, VkCommandBuffer cmdBuffer) {
+  VKC_CHECK (vkEndCommandBuffer (cmdBuffer));
 
   VkSubmitInfo submitInfo {SUBMIT_INFO};
   submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffer;
+  submitInfo.pCommandBuffers = &cmdBuffer;
 
-  VK_CHECK (vkQueueSubmit (transferContext->queue, 1, &submitInfo, transferContext->fence));
-  VK_CHECK (vkWaitForFences (device, 1, &transferContext->fence, VK_TRUE, ~0ull));
+  VKC_CHECK (vkQueueSubmit (transferContext->queue, 1, &submitInfo, transferContext->fence));
+  VKC_CHECK (vkWaitForFences (device, 1, &transferContext->fence, VK_TRUE, ~0ull));
 
-  VK_CHECK (vkResetFences (device, 1, &transferContext->fence));
-  VK_CHECK (vkResetCommandPool (device, transferContext->commandPool, VULKAN_NO_FLAGS));
+  VKC_CHECK (vkResetFences (device, 1, &transferContext->fence));
+  VKC_CHECK (vkResetCommandPool (device, transferContext->commandPool, VKC_NO_FLAGS));
 }
 
-void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo* allocationInfo, Buffer* output) {
+void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo* allocationInfo, Buffer* out) {
   VkBufferCreateInfo createInfo;
   createInfo.sType = BUFFER_CREATE_INFO;
   createInfo.size = allocationInfo->size;
   createInfo.usage = allocationInfo->bufferUsage;
 
   createInfo.pNext = nullptr;
-  createInfo.flags = VULKAN_NO_FLAGS;
+  createInfo.flags = VKC_NO_FLAGS;
   createInfo.queueFamilyIndexCount = 0;
   createInfo.pQueueFamilyIndices = nullptr;
   createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  output->size = allocationInfo->size;
+  out->size = allocationInfo->size;
 
   VmaAllocationCreateInfo vmaAllocationInfo {};
   vmaAllocationInfo.requiredFlags = allocationInfo->requiredFlags;
   vmaAllocationInfo.usage = (VmaMemoryUsage) allocationInfo->memoryUsage;
 
-  VK_CHECK (vmaCreateBuffer (
+  VKC_CHECK (vmaCreateBuffer (
     allocator,
     &createInfo,
     &vmaAllocationInfo,
-    &output->handle,
-    &output->allocation,
+    &out->handle,
+    &out->allocation,
     nullptr
   ));
 }
 
-void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer* output) {
+void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer* out) {
   BufferAllocationInfo allocationInfo;
   allocationInfo.size = size;
   allocationInfo.memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY;
@@ -424,26 +419,22 @@ void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer* o
   allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
   allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-  allocateBuffer (allocator, &allocationInfo, output);
+  allocateBuffer (allocator, &allocationInfo, out);
 }
 
 void copyBuffer (VkDevice device, const TransferContext* transferContext, const Buffer* source, Buffer* destination) {
-  auto commandBuffer = startImmediateCommand (device, transferContext->commandPool);
+  auto cmdBuffer = startImmediateCommand (device, transferContext->commandPool);
 
   VkBufferCopy copyRegion;
   copyRegion.srcOffset = 0;
   copyRegion.dstOffset = 0;
   copyRegion.size = source->size;
 
-  vkCmdCopyBuffer (commandBuffer, source->handle, destination->handle, 1, &copyRegion);
-  submitImmediateCommand (device, transferContext, commandBuffer);
+  vkCmdCopyBuffer (cmdBuffer, source->handle, destination->handle, 1, &copyRegion);
+  submitImmediateCommand (device, transferContext, cmdBuffer);
 }
 
-void transitionImageLayout (
-  VkCommandBuffer commandBuffer,
-  const ImageLayoutTransitionInfo* transitionInfo,
-  VkImage image) {
-
+void transitionImageLayout (VkCommandBuffer cmdBuffer, const ImageLayoutTransitionInfo* transitionInfo, VkImage image) {
   VkImageMemoryBarrier barrier {IMAGE_MEMORY_BARRIER};
   barrier.image = image;
   barrier.oldLayout = transitionInfo->oldLayout;
@@ -452,7 +443,7 @@ void transitionImageLayout (
 
   switch (transitionInfo->oldLayout) {
     case VK_IMAGE_LAYOUT_UNDEFINED:
-      barrier.srcAccessMask = VULKAN_NO_FLAGS;
+      barrier.srcAccessMask = VKC_NO_FLAGS;
       break;
 
     case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
@@ -464,7 +455,7 @@ void transitionImageLayout (
       break;
 
     default:
-      barrier.srcAccessMask = VULKAN_NO_FLAGS;
+      barrier.srcAccessMask = VKC_NO_FLAGS;
       break;
   }
 
@@ -482,15 +473,15 @@ void transitionImageLayout (
       break;
 
     default:
-      barrier.dstAccessMask = VULKAN_NO_FLAGS;
+      barrier.dstAccessMask = VKC_NO_FLAGS;
       break;
   }
 
   vkCmdPipelineBarrier (
-    commandBuffer,
+    cmdBuffer,
     transitionInfo->source,
     transitionInfo->destination,
-    VULKAN_NO_FLAGS,
+    VKC_NO_FLAGS,
     0, nullptr,
     0, nullptr,
     1, &barrier
@@ -502,15 +493,15 @@ void allocateTexture (
   VmaAllocator allocator,
   const TextureAllocationInfo* allocationInfo,
   const TransferContext* transferContext,
-  Image* output) {
+  Image* out) {
 
   VkExtent3D extent {allocationInfo->width, allocationInfo->height, 1};
   VkDeviceSize size = (VkDeviceSize) (extent.width * extent.height * 4);
-  Uint32 mipLevels = (Uint32) floorf (log2f ((float) MAX (extent.width, extent.height))) + 1;
+  const u32 mipLevels = (u32) floorf (log2f ((float) REI_MAX (extent.width, extent.height))) + 1;
 
   Buffer stagingBuffer;
   allocateStagingBuffer (allocator, size, &stagingBuffer);
-  VK_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
+  VKC_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
 
   LZ4_decompress_safe (
     allocationInfo->pixels,
@@ -524,7 +515,7 @@ void allocateTexture (
   {
     VkImageCreateInfo createInfo;
     createInfo.pNext = nullptr;
-    createInfo.flags = VULKAN_NO_FLAGS;
+    createInfo.flags = VKC_NO_FLAGS;
     createInfo.sType = IMAGE_CREATE_INFO;
     createInfo.queueFamilyIndexCount = 0;
     createInfo.pQueueFamilyIndices = nullptr;
@@ -533,7 +524,7 @@ void allocateTexture (
     createInfo.arrayLayers = 1;
     createInfo.mipLevels = mipLevels;
     createInfo.imageType = VK_IMAGE_TYPE_2D;
-    createInfo.format = VULKAN_TEXTURE_FORMAT;
+    createInfo.format = VKC_TEXTURE_FORMAT;
     createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -545,12 +536,12 @@ void allocateTexture (
     vmaAllocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     vmaAllocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-    VK_CHECK (vmaCreateImage (
+    VKC_CHECK (vmaCreateImage (
       allocator,
       &createInfo,
       &vmaAllocationInfo,
-      &output->handle,
-      &output->allocation,
+      &out->handle,
+      &out->allocation,
       nullptr
     ));
   }
@@ -562,7 +553,7 @@ void allocateTexture (
   subresourceRange.levelCount = mipLevels;
   subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-  auto commandBuffer = startImmediateCommand (device, transferContext->commandPool);
+  auto cmdBuffer = startImmediateCommand (device, transferContext->commandPool);
 
   {
     ImageLayoutTransitionInfo transitionInfo;
@@ -572,7 +563,7 @@ void allocateTexture (
     transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
     transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-    transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
+    transitionImageLayout (cmdBuffer, &transitionInfo, out->handle);
   }
 
   {
@@ -592,9 +583,9 @@ void allocateTexture (
     copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
     vkCmdCopyBufferToImage (
-      commandBuffer,
+      cmdBuffer,
       stagingBuffer.handle,
-      output->handle,
+      out->handle,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
       1, &copyRegion
     );
@@ -606,12 +597,12 @@ void allocateTexture (
     transitionInfo.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-    transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
+    transitionImageLayout (cmdBuffer, &transitionInfo, out->handle);
   }
 
   subresourceRange.levelCount = 1;
 
-  for (Uint32 mipLevel = 1; mipLevel < mipLevels; ++mipLevel) {
+  for (u32 mipLevel = 1; mipLevel < mipLevels; ++mipLevel) {
     subresourceRange.baseMipLevel = mipLevel;
 
     {
@@ -622,7 +613,7 @@ void allocateTexture (
       transitionInfo.destination = VK_PIPELINE_STAGE_TRANSFER_BIT;
       transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-      transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
+      transitionImageLayout (cmdBuffer, &transitionInfo, out->handle);
     }
 
     VkImageBlit imageBlit;
@@ -651,10 +642,10 @@ void allocateTexture (
     imageBlit.dstOffsets[1].y = (int32_t) (extent.height >> mipLevel);
 
     vkCmdBlitImage (
-      commandBuffer,
-      output->handle,
+      cmdBuffer,
+      out->handle,
       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-      output->handle,
+      out->handle,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
       1, &imageBlit,
       VK_FILTER_LINEAR
@@ -667,7 +658,7 @@ void allocateTexture (
    transitionInfo.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
    transitionInfo.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-   transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
+   transitionImageLayout (cmdBuffer, &transitionInfo, out->handle);
   }
 
   subresourceRange.baseMipLevel = 0;
@@ -680,17 +671,17 @@ void allocateTexture (
     transitionInfo.destination = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     transitionInfo.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    transitionImageLayout (commandBuffer, &transitionInfo, output->handle);
+    transitionImageLayout (cmdBuffer, &transitionInfo, out->handle);
   }
 
-  submitImmediateCommand (device, transferContext, commandBuffer);
+  submitImmediateCommand (device, transferContext, cmdBuffer);
   vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
 
   VkImageViewCreateInfo createInfo;
   createInfo.pNext = nullptr;
-  createInfo.image = output->handle;
-  createInfo.flags = VULKAN_NO_FLAGS;
-  createInfo.format = VULKAN_TEXTURE_FORMAT;
+  createInfo.image = out->handle;
+  createInfo.flags = VKC_NO_FLAGS;
+  createInfo.format = VKC_TEXTURE_FORMAT;
   createInfo.sType = IMAGE_VIEW_CREATE_INFO;
   createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
   createInfo.subresourceRange = subresourceRange;
@@ -699,7 +690,7 @@ void allocateTexture (
   createInfo.components.b = VK_COMPONENT_SWIZZLE_B;
   createInfo.components.a = VK_COMPONENT_SWIZZLE_A;
 
-  VK_CHECK (vkCreateImageView (device, &createInfo, nullptr, &output->view));
+  VKC_CHECK (vkCreateImageView (device, &createInfo, nullptr, &out->view));
 }
 
 }

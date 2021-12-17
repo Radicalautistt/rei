@@ -16,8 +16,8 @@ struct Window;
 namespace rei::vku {
 
 struct QueueFamilyIndices {
-  Bool haveGraphics, havePresent, haveTransfer, haveCompute;
-  Uint32 graphics, present, transfer, compute;
+  b8 haveGraphics, havePresent, haveTransfer, haveCompute;
+  u32 graphics, present, transfer, compute;
 };
 
 struct Image {
@@ -28,7 +28,7 @@ struct Image {
 
 struct AttachmentCreateInfo {
   VkFormat format;
-  Uint32 width, height;
+  u32 width, height;
   VkImageUsageFlags usage;
   VkImageAspectFlags aspectMask;
 };
@@ -45,7 +45,7 @@ struct SwapchainCreateInfo {
 struct Swapchain {
   VkFormat format;
 
-  Uint32 imagesCount;
+  u32 imagesCount;
   VkImage* images;
   VkImageView* views;
 
@@ -76,7 +76,7 @@ struct GraphicsPipelineCreateInfo {
 
 struct BufferAllocationInfo {
   VkBufferUsageFlags bufferUsage;
-  Uint32 memoryUsage;
+  u32 memoryUsage;
   VkMemoryPropertyFlags requiredFlags;
 
   VkDeviceSize size;
@@ -104,55 +104,35 @@ struct ImageLayoutTransitionInfo {
 
 struct TextureAllocationInfo {
   char* pixels;
-  Uint32 width, height;
+  u32 width, height;
   size_t compressedSize;
 };
 
-void findQueueFamilyIndices (
-  VkPhysicalDevice physicalDevice,
-  VkSurfaceKHR targetSurface,
-  QueueFamilyIndices* output
-);
+void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices* out);
+void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, QueueFamilyIndices* outputIndices, VkPhysicalDevice* out);
 
-void choosePhysicalDevice (
-  VkInstance instance,
-  VkSurfaceKHR targetSurface,
-  QueueFamilyIndices* outputIndices,
-  VkPhysicalDevice* output
-);
-
-void createAttachment (
-  VkDevice device,
-  VmaAllocator allocator,
-  const AttachmentCreateInfo* createInfo,
-  Image* output
-);
-
-void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* output);
+void createAttachment (VkDevice device, VmaAllocator allocator, const AttachmentCreateInfo* createInfo, Image* out);
+void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* out);
 void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain* swapchain);
 
-void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule* output);
-void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* createInfo, VkPipeline* output);
+void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule* out);
+void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* createInfo, VkPipeline* out);
 
 [[nodiscard]] VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool);
 void submitImmediateCommand (VkDevice device, const TransferContext* transferContext, VkCommandBuffer commandBuffer);
 
-void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo* allocationInfo, Buffer* output);
-void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer* output);
+void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo* allocationInfo, Buffer* out);
+void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer* out);
 void copyBuffer (VkDevice device, const TransferContext* transferContext, const Buffer* source, Buffer* destination);
 
-void transitionImageLayout (
-  VkCommandBuffer commandBuffer,
-  const ImageLayoutTransitionInfo* transitionInfo,
-  VkImage image
-);
+void transitionImageLayout (VkCommandBuffer commandBuffer, const ImageLayoutTransitionInfo* transitionInfo, VkImage image);
 
 void allocateTexture (
   VkDevice device,
   VmaAllocator allocator,
   const TextureAllocationInfo* allocationInfo,
   const TransferContext* transferContext,
-  Image* output
+  Image* out
 );
 
 }

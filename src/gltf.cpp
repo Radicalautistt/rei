@@ -21,7 +21,7 @@ AlphaMode parseAlphaMode (const char* rawMode) noexcept {
   return AlphaMode::Unknown;
 }
 
-Uint8 countComponents (AccessorType accessorType) noexcept {
+u8 countComponents (AccessorType accessorType) noexcept {
   switch (accessorType) {
     case AccessorType::Vec2: return 2;
     case AccessorType::Vec3: return 3;
@@ -45,7 +45,7 @@ AccessorType parseAccessorType (const char* rawType) noexcept {
   return AccessorType::Unknown;
 }
 
-TopologyType parsePrimitiveMode (Uint64 mode) noexcept {
+TopologyType parsePrimitiveMode (u64 mode) noexcept {
   switch (mode) {
     case 1: return TopologyType::Lines;
     case 0: return TopologyType::Points;
@@ -58,7 +58,7 @@ TopologyType parsePrimitiveMode (Uint64 mode) noexcept {
   }
 }
 
-AccessorComponentType parseAccessorComponentType (Uint64 type) noexcept {
+AccessorComponentType parseAccessorComponentType (u64 type) noexcept {
   switch (type) {
     case 5120: return AccessorComponentType::Int8;
     case 5121: return AccessorComponentType::Uint8;
@@ -71,7 +71,7 @@ AccessorComponentType parseAccessorComponentType (Uint64 type) noexcept {
 }
 
 void load (const char* relativePath, Data* output) {
-  LOG_INFO ("Loading a gltf model from " ANSI_YELLOW "%s", relativePath);
+  REI_LOG_INFO ("Loading a gltf model from " ANSI_YELLOW "%s", relativePath);
 
   { // Load buffer data from .bin file
     char binaryPath[256] {};
@@ -80,16 +80,16 @@ void load (const char* relativePath, Data* output) {
     memcpy (extension + 1, "bin", 4);
 
     File binaryFile;
-    REI_CHECK (readFile (binaryPath, True, &binaryFile));
+    REI_CHECK (readFile (binaryPath, REI_TRUE, &binaryFile));
 
-    output->buffer = MALLOC (Uint8, binaryFile.size);
-    memcpy (output->buffer, (Uint8*) binaryFile.contents, binaryFile.size);
+    output->buffer = REI_MALLOC (u8, binaryFile.size);
+    memcpy (output->buffer, (u8*) binaryFile.contents, binaryFile.size);
 
     free (binaryFile.contents);
   }
 
   File gltf;
-  REI_CHECK (readFile (relativePath, False, &gltf));
+  REI_CHECK (readFile (relativePath, REI_FALSE, &gltf));
 
   rapidjson::Document parsedGLTF;
   parsedGLTF.Parse ((const char*) gltf.contents);
@@ -98,9 +98,9 @@ void load (const char* relativePath, Data* output) {
   // Load buffer views
   const auto& bufferViews = parsedGLTF["bufferViews"].GetArray ();
   output->bufferViewsCount = bufferViews.Size ();
-  output->bufferViews = MALLOC (BufferView, output->bufferViewsCount);
+  output->bufferViews = REI_MALLOC (BufferView, output->bufferViewsCount);
 
-  Uint32 offset = 0;
+  u32 offset = 0;
   for (const auto& bufferView : bufferViews) {
     auto newBufferView = &output->bufferViews[offset++];
     newBufferView->buffer = bufferView["buffer"].GetUint ();
@@ -111,7 +111,7 @@ void load (const char* relativePath, Data* output) {
   // Load accessors
   const auto& accessors = parsedGLTF["accessors"].GetArray ();
   output->accessorsCount = accessors.Size ();
-  output->accessors = MALLOC (Accessor, output->accessorsCount);
+  output->accessors = REI_MALLOC (Accessor, output->accessorsCount);
 
   offset = 0;
   for (const auto& accessor : accessors) {
@@ -135,7 +135,7 @@ void load (const char* relativePath, Data* output) {
   const auto& defaultMesh = *parsedGLTF["meshes"].GetArray().Begin ();
   const auto& primitives = defaultMesh["primitives"].GetArray ();
   output->mesh.primitivesCount = primitives.Size ();
-  output->mesh.primitives = MALLOC (Primitive, output->mesh.primitivesCount);
+  output->mesh.primitives = REI_MALLOC (Primitive, output->mesh.primitivesCount);
 
   #define GET_ATTRIBUTE(name, fieldName) do {                                        \
     if (primitive["attributes"].HasMember(name))                                     \
@@ -160,7 +160,7 @@ void load (const char* relativePath, Data* output) {
   // Load images
   const auto& images = parsedGLTF["images"].GetArray ();
   output->imagesCount = images.Size ();
-  output->images = MALLOC (Image, output->imagesCount);
+  output->images = REI_MALLOC (Image, output->imagesCount);
 
   offset = 0;
   for (const auto& image : images) {
@@ -172,7 +172,7 @@ void load (const char* relativePath, Data* output) {
   // Load textures
   const auto& textures = parsedGLTF["textures"].GetArray ();
   output->texturesCount = textures.Size ();
-  output->textures = MALLOC (Texture, output->texturesCount);
+  output->textures = REI_MALLOC (Texture, output->texturesCount);
 
   offset = 0;
   for (const auto& texture : textures) {
@@ -183,7 +183,7 @@ void load (const char* relativePath, Data* output) {
   // Load materials
   const auto& materials = parsedGLTF["materials"].GetArray ();
   output->materialsCount = materials.Size ();
-  output->materials = MALLOC (Material, output->materialsCount);
+  output->materials = REI_MALLOC (Material, output->materialsCount);
 
   offset = 0;
   for (const auto& material : materials) {

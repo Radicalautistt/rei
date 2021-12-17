@@ -7,26 +7,26 @@
 namespace rei {
 
 struct Camera {
-  enum class Direction : Uint8 {
+  enum class Direction : u8 {
     Left,
     Right,
     Forward,
     Backward,
   };
 
-  Bool32 firstMouse;
-  Float32 zoom, speed, sensitivity;
+  b32 firstMouse;
+  f32 zoom, speed, sensitivity;
   math::Vector3 up;
-  Float32 yaw, pitch, lastX, lastY;
+  f32 yaw, pitch, lastX, lastY;
 
   math::Vector3 front, right, worldUp, position;
   math::Matrix4 projection;
 
   void update () noexcept;
-  void handleMouseMovement (Float32 x, Float32 y) noexcept;
-  void move (Direction direction, Float32 deltaTime) noexcept;
+  void handleMouseMovement (f32 x, f32 y) noexcept;
+  void move (Direction direction, f32 deltaTime) noexcept;
 
-  Camera (const math::Vector3& up, const math::Vector3& position, Float32 yaw, Float32 pitch);
+  Camera (const math::Vector3& up, const math::Vector3& position, f32 yaw, f32 pitch);
 };
 
 };

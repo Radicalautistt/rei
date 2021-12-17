@@ -17,18 +17,18 @@ struct xcb_connection_t;
 namespace rei::xcb {
 
 struct WindowCreateInfo {
-  Int16 x, y;
-  Uint16 width, height;
+  i16 x, y;
+  u16 width, height;
   const char* name;
 };
 
 struct Window {
-  Uint16 width, height;
-  Uint32 handle;
+  u16 width, height;
+  u32 handle;
   xcb_connection_t* connection;
   xcb_screen_t* screen;
 
-  void getMousePosition (Float32* output);
+  void getMousePosition (f32* output);
 };
 
 void createWindow (const WindowCreateInfo* createInfo, Window* output);

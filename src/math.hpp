@@ -16,7 +16,7 @@
 
 namespace rei::math {
 
-[[nodiscard]] constexpr inline Float32 radians (Float32 degrees) noexcept {
+[[nodiscard]] constexpr inline f32 radians (f32 degrees) noexcept {
   return degrees * PI_BY_180;
 }
 
@@ -57,8 +57,8 @@ namespace simd::m128 {
   // used with _mm_shuffle_ps returns a register
   // of form (w, x, z, y) (in this case w is ingnored since we are operating on 3d vectors),
   // just like the first column of the formula (in reverse order).
-  const Int32 leftMask = _MM_SHUFFLE (3, 0, 2, 1);
-  const Int32 rightMask = _MM_SHUFFLE (3, 1, 0, 2);
+  const i32 leftMask = _MM_SHUFFLE (3, 0, 2, 1);
+  const i32 rightMask = _MM_SHUFFLE (3, 1, 0, 2);
 
   __m128 columns[4];
   columns[0] = _mm_shuffle_ps (a, a, leftMask);
@@ -71,19 +71,19 @@ namespace simd::m128 {
 }
 
 struct Vector2 {
-  Float32 x, y;
+  f32 x, y;
 
   Vector2 () = default;
-  constexpr Vector2 (Float32 x, Float32 y) : x {x}, y {y} {}
-  constexpr Vector2 (Float32 scalar) : x {scalar}, y {scalar} {}
+  constexpr Vector2 (f32 x, f32 y) : x {x}, y {y} {}
+  constexpr Vector2 (f32 scalar) : x {scalar}, y {scalar} {}
 };
 
 struct alignas (16) Vector3 {
-  Float32 x, y, z;
+  f32 x, y, z;
 
   Vector3 () = default;
-  constexpr Vector3 (Float32 x, Float32 y, Float32 z) : x {x}, y {y}, z {z} {}
-  constexpr Vector3 (Float32 scalar) : x {scalar}, y {scalar}, z {scalar} {}
+  constexpr Vector3 (f32 x, f32 y, f32 z) : x {x}, y {y}, z {z} {}
+  constexpr Vector3 (f32 scalar) : x {scalar}, y {scalar}, z {scalar} {}
 
   [[nodiscard]] inline __m128 load () const noexcept {
     return _mm_set_ps (0.f, z, y, x);
@@ -97,7 +97,7 @@ struct alignas (16) Vector3 {
     _mm_store_ps (&out->x, _mm_sub_ps (a->load (), b->load ()));
   }
 
-  static inline void mulScalar (const Vector3* vector, Float32 scalar, Vector3* out) {
+  static inline void mulScalar (const Vector3* vector, f32 scalar, Vector3* out) {
     _mm_store_ps (&out->x, _mm_mul_ps (_mm_set1_ps (scalar), vector->load ()));
   }
 
@@ -105,7 +105,7 @@ struct alignas (16) Vector3 {
     _mm_store_ps (&output->x, simd::m128::normalize (output->load ()));
   }
 
-  [[nodiscard]] static inline Float32 dotProduct (const Vector3* a, const Vector3* b) noexcept {
+  [[nodiscard]] static inline f32 dotProduct (const Vector3* a, const Vector3* b) noexcept {
     return _mm_cvtss_f32 (simd::m128::dotProduct (a->load (), b->load ()));
   }
 
@@ -115,13 +115,13 @@ struct alignas (16) Vector3 {
 };
 
 struct Vector4 {
-  Float32 x, y, z, w;
+  f32 x, y, z, w;
 
   Vector4 () = default;
-  constexpr Vector4 (Float32 scalar) :
+  constexpr Vector4 (f32 scalar) :
     x {scalar}, y {scalar}, z {scalar}, w {scalar} {}
 
-  constexpr Vector4 (Float32 x, Float32 y, Float32 z, Float32 w) :
+  constexpr Vector4 (f32 x, f32 y, f32 z, f32 w) :
     x {x}, y {y}, z {z}, w {w} {}
 
   [[nodiscard]] inline __m128 load () const noexcept {
@@ -136,7 +136,7 @@ struct Vector4 {
     _mm_store_ps (&out->x, _mm_mul_ps (a->load (), b->load ()));
   }
 
-  static inline void mulScalar (const Vector4* vector, Float32 scalar, Vector4* out) {
+  static inline void mulScalar (const Vector4* vector, f32 scalar, Vector4* out) {
     _mm_store_ps (&out->x, _mm_mul_ps (_mm_set1_ps (scalar), vector->load ()));
   }
 };
@@ -145,7 +145,7 @@ struct Matrix4 {
   Vector4 rows[4];
 
   Matrix4 () = default;
-  Matrix4 (Float32 value) {
+  Matrix4 (f32 value) {
     rows[0].x = value;
     rows[0].y = 0.f;
     rows[0].z = 0.f;
@@ -228,7 +228,7 @@ struct Matrix4 {
 };
 
 void lookAt (const Vector3* eye, const Vector3* center, const Vector3* up, Matrix4* out);
-void perspective (Float32 fov, Float32 aspect, Float32 zNear, Float32 zFar, Matrix4* out);
+void perspective (f32 fov, f32 aspect, f32 zNear, f32 zFar, Matrix4* out);
 
 }
 

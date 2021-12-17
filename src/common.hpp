@@ -44,68 +44,68 @@
 #  define ANSI_PURPLE "\033[1;35m"
 #endif
 
-#ifndef LOG_INFO
-#  define LOG_INFO(format, ...) \
+#ifndef REI_LOG_INFO
+#  define REI_LOG_INFO(format, ...) \
      rei::logger (rei::LogLevelInfo, format, __VA_ARGS__)
 #endif
 
-#ifndef LOG_ERROR
-#  define LOG_ERROR(format, ...) \
+#ifndef REI_LOG_ERROR
+#  define REI_LOG_ERROR(format, ...) \
      rei::logger (rei::LogLevelError, format, __VA_ARGS__)
 #endif
 
-#ifndef LOG_WARNING
-#  define LOG_WARNING(format, ...) \
+#ifndef REI_LOG_WARN
+#  define REI_LOG_WARN(format, ...) \
      rei::logger (rei::LogLevelWarning, format, __VA_ARGS__)
 #endif
 
-#ifndef LOGS_INFO
-#  define LOGS_INFO(string) LOG_INFO ("%s", string)
+#ifndef REI_LOGS_INFO
+#  define REI_LOGS_INFO(string) REI_LOG_INFO ("%s", string)
 #endif
 
-#ifndef LOGS_ERROR
-#  define LOGS_ERROR(string) LOG_ERROR ("%s", string)
+#ifndef REI_LOGS_ERROR
+#  define REI_LOGS_ERROR(string) REI_LOG_ERROR ("%s", string)
 #endif
 
-#ifndef LOGS_WARNING
-#  define LOGS_WARNING(string) LOG_WARNING ("%s", string)
+#ifndef REI_LOGS_WARN
+#  define REI_LOGS_WARN(string) REI_LOG_WARN ("%s", string)
 #endif
 
 // General-purpose macros
-#ifndef SWAP
-#  define SWAP(a, b) do { \
-     auto temp = *a;      \
-     *a = *b;             \
-     *b = temp;           \
+#ifndef REI_SWAP
+#  define REI_SWAP(a, b) do { \
+     auto temp = *a;          \
+     *a = *b;                 \
+     *b = temp;               \
    } while (0)
 #endif
 
-#ifndef MIN
-#  define MIN(a, b) (((a) > (b)) ? (b) : (a))
+#ifndef REI_MIN
+#  define REI_MIN(a, b) (((a) > (b)) ? (b) : (a))
 #endif
 
-#ifndef MAX
-#  define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#ifndef REI_MAX
+#  define REI_MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
-#ifndef ARRAY_SIZE
-#  define ARRAY_SIZE(array) sizeof (array) / sizeof *array
+#ifndef REI_CLAMP
+#  define REI_CLAMP(value, min, max) (REI_MAX (min, REI_MIN (value, max)))
 #endif
 
-#ifndef ALLOCA
-#  define ALLOCA(Type, count) (Type*) alloca (sizeof (Type) * count)
+#ifndef REI_ARRAY_SIZE
+#  define REI_ARRAY_SIZE(array) (sizeof (array) / sizeof *array)
 #endif
 
-#ifndef MALLOC
-#  define MALLOC(Type, count) (Type*) malloc (sizeof (Type) * count)
+#ifndef REI_ALLOCA
+#  define REI_ALLOCA(Type, count) (Type*) alloca (sizeof (Type) * count)
+#endif
+
+#ifndef REI_MALLOC
+#  define REI_MALLOC(Type, count) (Type*) malloc (sizeof (Type) * count)
 #endif
 
 #ifndef REI_OFFSET_OF
 #  define REI_OFFSET_OF(structure, member) ((size_t) &(((structure*) nullptr)->member))
-#endif
-
-#ifndef CLAMP
-#  define CLAMP(value, min, max) (((value) > (max)) ? (max) : (((value) < (min)) ? (min) : (value)))
 #endif
 
 #ifdef NDEBUG
@@ -118,7 +118,7 @@
        if (condition) {                                              \
          (void) 0;                                                   \
        } else {                                                      \
-         LOG_ERROR (                                                 \
+         REI_LOG_ERROR (                                             \
            "%s:%d Assertion " ANSI_YELLOW "[%s]" ANSI_RED " failed", \
            __FILE__,                                                 \
            __LINE__,                                                 \
@@ -139,7 +139,7 @@
 #    define REI_CHECK(call) do {                                                           \
        rei::Result result = call;                                                          \
        if (result != rei::Result::Success) {                                               \
-         LOG_ERROR (                                                                       \
+         REI_LOG_ERROR (                                                                   \
 	   "%s:%d Rei error " ANSI_YELLOW "[%s]" ANSI_RED " occured in " ANSI_YELLOW "%s", \
 	   __FILE__,                                                                       \
 	   __LINE__,                                                                       \
@@ -153,38 +153,38 @@
 #  endif
 #endif
 
-#ifndef COUNT_CYCLES
-#  define COUNT_CYCLES(routine) do {                                                        \
-     Uint64 start = __rdtsc ();                                                             \
-     routine;                                                                               \
-     Uint64 end = __rdtsc () - start;                                                       \
-     LOG_INFO (ANSI_YELLOW "%s" ANSI_GREEN " took %llu cycles to comptute", #routine, end); \
+#ifndef REI_COUNT_CYCLES
+#  define REI_COUNT_CYCLES(routine) do {                                                        \
+     u64 start = __rdtsc ();                                                                    \
+     routine;                                                                                   \
+     u64 end = __rdtsc () - start;                                                              \
+     REI_LOG_INFO (ANSI_YELLOW "%s" ANSI_GREEN " took %llu cycles to comptute", #routine, end); \
    } while (0)
 #endif
 
 // Count of frames in flight
-#ifndef FRAMES_COUNT
-#  define FRAMES_COUNT 2u
+#ifndef REI_FRAMES_COUNT
+#  define REI_FRAMES_COUNT 2u
 #endif
 
 namespace rei {
 
-enum LogLevel : Uint8 {
+enum LogLevel : u8 {
   LogLevelInfo,
   LogLevelError,
   LogLevelWarning
 };
 
-enum class Result : Uint8 {
+enum class Result : u8 {
   Success,
   FileIsEmpty,
   FileDoesNotExist
 };
 
 struct Vertex {
-  Float32 x, y, z;
-  Float32 nx, ny, nz;
-  Float32 u, v;
+  f32 x, y, z;
+  f32 nx, ny, nz;
+  f32 u, v;
 };
 
 struct File {
@@ -196,13 +196,14 @@ struct Timer {
   static timeval start;
 
   static void init () noexcept;
-  [[nodiscard]] static Float32 getCurrentTime () noexcept;
+  [[nodiscard]] static f32 getCurrentTime () noexcept;
 };
 
 void logger (LogLevel level, const char* format, ...);
 
 [[nodiscard]] const char* getError (Result result) noexcept;
-Result readFile (const char* relativePath, Bool binary, File* output);
+Result readFile (const char* relativePath, b8 binary, File* output);
+void writeFile (const char* relativePath, b8 binary, void* data, size_t size);
 
 };
 
