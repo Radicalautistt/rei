@@ -220,10 +220,6 @@ struct Context {
   static void loadDevice (VkDevice device);
 };
 
-constexpr const char* requiredDeviceExtensions[] {
-  VK_KHR_SWAPCHAIN_EXTENSION_NAME
-};
-
 [[nodiscard]] const char* getError (VkResult) noexcept;
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback (

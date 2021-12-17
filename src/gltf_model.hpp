@@ -39,14 +39,7 @@ struct Model {
   void draw (VkCommandBuffer cmdBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection);
 };
 
-void load (
-  VkDevice device,
-  VmaAllocator allocator,
-  const vku::TransferContext* transferContext,
-  const char* relativePath,
-  Model* output
-);
-
+void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* transferContext, const char* relativePath, Model* out);
 void destroy (VkDevice device, VmaAllocator allocator, Model* model);
 
 }

@@ -216,7 +216,8 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
     subresourceRange.baseArrayLayer = 0;
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    auto cmdBuffer = vku::startImmediateCommand (device, createInfo->transferContext->commandPool);
+    VkCommandBuffer cmdBuffer;
+    vku::startImmediateCmd (device, createInfo->transferContext, &cmdBuffer);
 
     {
       vku::ImageLayoutTransitionInfo transitionInfo;
@@ -265,7 +266,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
       vku::transitionImageLayout (cmdBuffer, &transitionInfo, output->fontTexture.handle);
     }
 
-    vku::submitImmediateCommand (device, createInfo->transferContext, cmdBuffer);
+    vku::submitImmediateCmd (device, createInfo->transferContext, cmdBuffer);
     vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
 
     VkImageViewCreateInfo info;

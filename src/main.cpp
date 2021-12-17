@@ -513,7 +513,7 @@ int main () {
   }
 
   { // Create instance
-    const char* requiredExtensions[] {
+    const char* const requiredExtensions[] {
       VK_KHR_SURFACE_EXTENSION_NAME,
       VK_KHR_XCB_SURFACE_EXTENSION_NAME,
       #ifndef NDEBUG
@@ -594,8 +594,18 @@ int main () {
   }
 
   { // Choose physical device, create logical device
-    rei::vku::QueueFamilyIndices indices;
-    rei::vku::choosePhysicalDevice (instance, windowSurface, &indices, &physicalDevice);
+    rei::vku::QueueIndices indices;
+    const char* const requiredExtensions[] {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    const u32 requiredExtensionCount = (u32) REI_ARRAY_SIZE (requiredExtensions);
+
+    rei::vku::choosePhysicalDevice (
+      instance,
+      windowSurface,
+      requiredExtensions,
+      requiredExtensionCount,
+      &indices,
+      &physicalDevice
+    );
 
     {
       // Make sure that VKC_TEXTURE_FORMAT supports image blitting (which is needed for mipmap generation) on the chosen device
@@ -610,7 +620,7 @@ int main () {
 
     VkPhysicalDeviceFeatures enabledFeatures {};
 
-    f32 queuePriority = 1.f;
+    const f32 queuePriority = 1.f;
     // NOTE All required queues have the same index on my device,
     // so I need only one queue create info. Perhaps, I might
     // handle them more appropriately in the future (so that this can work on different devices),
@@ -626,8 +636,8 @@ int main () {
     createInfo.queueCreateInfoCount = 1;
     createInfo.pQueueCreateInfos = &queueInfo;
     createInfo.pEnabledFeatures = &enabledFeatures;
-    createInfo.ppEnabledExtensionNames = rei::vkc::requiredDeviceExtensions;
-    createInfo.enabledExtensionCount = REI_ARRAY_SIZE (rei::vkc::requiredDeviceExtensions);
+    createInfo.ppEnabledExtensionNames = requiredExtensions;
+    createInfo.enabledExtensionCount = requiredExtensionCount;
 
     VKC_CHECK (vkCreateDevice (physicalDevice, &createInfo, nullptr, &device));
 

@@ -15,8 +15,7 @@ struct Window;
 
 namespace rei::vku {
 
-struct QueueFamilyIndices {
-  b8 haveGraphics, havePresent, haveTransfer, haveCompute;
+struct QueueIndices {
   u32 graphics, present, transfer, compute;
 };
 
@@ -108,8 +107,16 @@ struct TextureAllocationInfo {
   size_t compressedSize;
 };
 
-void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices* out);
-void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, QueueFamilyIndices* outputIndices, VkPhysicalDevice* out);
+b8 findQueueIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueIndices* out);
+
+void choosePhysicalDevice (
+  VkInstance instance,
+  VkSurfaceKHR targetSurface,
+  const char* const* requiredExtensions,
+  u32 requiredExtensionCount,
+  QueueIndices* outputIndices,
+  VkPhysicalDevice* out
+);
 
 void createAttachment (VkDevice device, VmaAllocator allocator, const AttachmentCreateInfo* createInfo, Image* out);
 void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* out);
@@ -118,12 +125,11 @@ void destroySwapchain (VkDevice device, VmaAllocator allocator, Swapchain* swapc
 void createShaderModule (VkDevice device, const char* relativePath, VkShaderModule* out);
 void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* createInfo, VkPipeline* out);
 
-[[nodiscard]] VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool);
-void submitImmediateCommand (VkDevice device, const TransferContext* transferContext, VkCommandBuffer commandBuffer);
+void startImmediateCmd (VkDevice device, const TransferContext* transferContext, VkCommandBuffer* out);
+void submitImmediateCmd (VkDevice device, const TransferContext* transferContext, VkCommandBuffer cmdBuffer);
 
 void allocateBuffer (VmaAllocator allocator, const BufferAllocationInfo* allocationInfo, Buffer* out);
 void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer* out);
-void copyBuffer (VkDevice device, const TransferContext* transferContext, const Buffer* source, Buffer* destination);
 
 void transitionImageLayout (VkCommandBuffer commandBuffer, const ImageLayoutTransitionInfo* transitionInfo, VkImage image);
 

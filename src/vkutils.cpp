@@ -9,14 +9,16 @@
 
 namespace rei::vku {
 
-void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueFamilyIndices* out) {
-  out->haveGraphics = out->havePresent = out->haveTransfer = out->haveCompute = REI_FALSE;
+b8 findQueueIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targetSurface, QueueIndices* out) {
+  out->graphics = out->compute = out->present = out->transfer = UINT32_MAX;
 
   u32 count = 0;
   vkGetPhysicalDeviceQueueFamilyProperties (physicalDevice, &count, nullptr);
 
   auto available = REI_ALLOCA (VkQueueFamilyProperties, count);
   vkGetPhysicalDeviceQueueFamilyProperties (physicalDevice, &count, available);
+
+  #define IS_VALID(queue) (out->queue != UINT32_MAX)
 
   for (u32 index = 0; index < count; ++index) {
     auto current = &available[index];
@@ -25,33 +27,30 @@ void findQueueFamilyIndices (VkPhysicalDevice physicalDevice, VkSurfaceKHR targe
       VkBool32 supportsPresentation = VK_FALSE;
       VKC_CHECK (vkGetPhysicalDeviceSurfaceSupportKHR (physicalDevice, index, targetSurface, &supportsPresentation));
 
-      if (supportsPresentation) {
-	out->havePresent = REI_TRUE;
-	out->present = index;
-      }
+      if (supportsPresentation) out->present = index;
+      if (current->queueFlags & VK_QUEUE_COMPUTE_BIT) out->compute = index;
+      if (current->queueFlags & VK_QUEUE_GRAPHICS_BIT) out->graphics = index;
+      if (current->queueFlags & VK_QUEUE_TRANSFER_BIT) out->transfer = index;
 
-      if (current->queueFlags & VK_QUEUE_COMPUTE_BIT) {
-	out->haveCompute = REI_TRUE;
-        out->compute = index;
+      if (IS_VALID (graphics) && IS_VALID (present) && IS_VALID (transfer) && IS_VALID (compute)) {
+        #undef IS_VALID
+        return REI_TRUE;
       }
-
-      if (current->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-	out->haveGraphics = REI_TRUE;
-	out->graphics = index;
-      }
-
-      if (current->queueFlags & VK_QUEUE_TRANSFER_BIT) {
-        out->haveTransfer = REI_TRUE;
-	out->transfer = index;
-      }
-
-      if (out->haveGraphics && out->havePresent && out->haveTransfer && out->haveCompute)
-	break;
     }
   }
+
+  #undef IS_VALID
+  return REI_FALSE;
 }
 
-void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, QueueFamilyIndices* outputIndices, VkPhysicalDevice* out) {
+void choosePhysicalDevice (
+  VkInstance instance,
+  VkSurfaceKHR targetSurface,
+  const char* const* requiredExtensions,
+  u32 requiredExtensionCount,
+  QueueIndices* outputIndices,
+  VkPhysicalDevice* out) {
+
   u32 count = 0;
   VKC_CHECK (vkEnumeratePhysicalDevices (instance, &count, nullptr));
 
@@ -60,7 +59,7 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
 
   for (u32 index = 0; index < count; ++index) {
     auto current = available[index];
-    b8 supportsExtensions, supportsSwapchain = REI_FALSE;
+    b8 supportsExtensions = REI_FALSE;
 
     { // Check support for required extensions
       u32 extensionsCount = 0;
@@ -69,11 +68,11 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
       auto availableExtensions = REI_ALLOCA (VkExtensionProperties, extensionsCount);
       VKC_CHECK (vkEnumerateDeviceExtensionProperties (current, nullptr, &extensionsCount, availableExtensions));
 
-      for (u32 required = 0; required < REI_ARRAY_SIZE (vkc::requiredDeviceExtensions); ++required) {
+      for (u32 required = 0; required < requiredExtensionCount; ++required) {
 	supportsExtensions = REI_FALSE;
 
 	for (u32 present = 0; present < extensionsCount; ++present) {
-	  if (!strcmp (availableExtensions[present].extensionName, vkc::requiredDeviceExtensions[required])) {
+	  if (!strcmp (availableExtensions[present].extensionName, requiredExtensions[required])) {
 	    supportsExtensions = REI_TRUE;
 	    break;
 	  }
@@ -81,23 +80,14 @@ void choosePhysicalDevice (VkInstance instance, VkSurfaceKHR targetSurface, Queu
       }
     }
 
-    if (supportsExtensions) {
-      u32 formatsCount = 0, presentModesCount = 0;
-      VKC_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (current, targetSurface, &formatsCount, nullptr));
-      VKC_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (current, targetSurface, &presentModesCount, nullptr));
+    u32 formatsCount = 0, presentModesCount = 0;
+    VKC_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (current, targetSurface, &formatsCount, nullptr));
+    VKC_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (current, targetSurface, &presentModesCount, nullptr));
 
-      supportsSwapchain = formatsCount && presentModesCount;
-    }
+    b8 supportsSwapchain = formatsCount && presentModesCount;
+    b8 hasQueueFamilies = findQueueIndices (current, targetSurface, outputIndices);
 
-    findQueueFamilyIndices (current, targetSurface, outputIndices);
-
-    b8 hasQueueFamilies =
-      outputIndices->haveGraphics &&
-      outputIndices->havePresent &&
-      outputIndices->haveTransfer &&
-      outputIndices->haveCompute;
-
-    if (hasQueueFamilies && supportsSwapchain) {
+    if (hasQueueFamilies && supportsExtensions && supportsSwapchain) {
       *out = current;
       break;
     }
@@ -353,28 +343,39 @@ void createGraphicsPipeline (VkDevice device, const GraphicsPipelineCreateInfo* 
   vkDestroyShaderModule (device, vertexShader, nullptr);
 }
 
-VkCommandBuffer startImmediateCommand (VkDevice device, VkCommandPool commandPool) {
-  VkCommandBuffer cmdBuffer;
-
-  VkCommandBufferAllocateInfo allocationInfo {COMMAND_BUFFER_ALLOCATE_INFO};
+void startImmediateCmd (VkDevice device, const TransferContext* transferContext, VkCommandBuffer* out) {
+  VkCommandBufferAllocateInfo allocationInfo;
+  allocationInfo.pNext = nullptr;
   allocationInfo.commandBufferCount = 1;
-  allocationInfo.commandPool = commandPool;
+  allocationInfo.sType = COMMAND_BUFFER_ALLOCATE_INFO;
+  allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocationInfo.commandPool = transferContext->commandPool;
 
-  VKC_CHECK (vkAllocateCommandBuffers (device, &allocationInfo, &cmdBuffer));
+  VKC_CHECK (vkAllocateCommandBuffers (device, &allocationInfo, out));
 
-  VkCommandBufferBeginInfo beginInfo {COMMAND_BUFFER_BEGIN_INFO};
+  VkCommandBufferBeginInfo beginInfo;
+  beginInfo.pNext = nullptr;
+  beginInfo.pInheritanceInfo = nullptr;
+  beginInfo.sType = COMMAND_BUFFER_BEGIN_INFO;
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-  VKC_CHECK (vkBeginCommandBuffer (cmdBuffer, &beginInfo));
-  return cmdBuffer;
+  VKC_CHECK (vkBeginCommandBuffer (*out, &beginInfo));
 }
 
-void submitImmediateCommand (VkDevice device, const TransferContext* transferContext, VkCommandBuffer cmdBuffer) {
+void submitImmediateCmd (VkDevice device, const TransferContext* transferContext, VkCommandBuffer cmdBuffer) {
   VKC_CHECK (vkEndCommandBuffer (cmdBuffer));
 
-  VkSubmitInfo submitInfo {SUBMIT_INFO};
+  VkSubmitInfo submitInfo;
+  submitInfo.sType = SUBMIT_INFO;
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &cmdBuffer;
+
+  submitInfo.pNext = nullptr;
+  submitInfo.waitSemaphoreCount = 0;
+  submitInfo.signalSemaphoreCount = 0;
+  submitInfo.pWaitSemaphores = nullptr;
+  submitInfo.pWaitDstStageMask = nullptr;
+  submitInfo.pSignalSemaphores = nullptr;
 
   VKC_CHECK (vkQueueSubmit (transferContext->queue, 1, &submitInfo, transferContext->fence));
   VKC_CHECK (vkWaitForFences (device, 1, &transferContext->fence, VK_TRUE, ~0ull));
@@ -420,18 +421,6 @@ void allocateStagingBuffer (VmaAllocator allocator, VkDeviceSize size, Buffer* o
   allocationInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
   allocateBuffer (allocator, &allocationInfo, out);
-}
-
-void copyBuffer (VkDevice device, const TransferContext* transferContext, const Buffer* source, Buffer* destination) {
-  auto cmdBuffer = startImmediateCommand (device, transferContext->commandPool);
-
-  VkBufferCopy copyRegion;
-  copyRegion.srcOffset = 0;
-  copyRegion.dstOffset = 0;
-  copyRegion.size = source->size;
-
-  vkCmdCopyBuffer (cmdBuffer, source->handle, destination->handle, 1, &copyRegion);
-  submitImmediateCommand (device, transferContext, cmdBuffer);
 }
 
 void transitionImageLayout (VkCommandBuffer cmdBuffer, const ImageLayoutTransitionInfo* transitionInfo, VkImage image) {
@@ -553,7 +542,8 @@ void allocateTexture (
   subresourceRange.levelCount = mipLevels;
   subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-  auto cmdBuffer = startImmediateCommand (device, transferContext->commandPool);
+  VkCommandBuffer cmdBuffer;
+  startImmediateCmd (device, transferContext, &cmdBuffer);
 
   {
     ImageLayoutTransitionInfo transitionInfo;
@@ -674,7 +664,7 @@ void allocateTexture (
     transitionImageLayout (cmdBuffer, &transitionInfo, out->handle);
   }
 
-  submitImmediateCommand (device, transferContext, cmdBuffer);
+  submitImmediateCmd (device, transferContext, cmdBuffer);
   vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
 
   VkImageViewCreateInfo createInfo;

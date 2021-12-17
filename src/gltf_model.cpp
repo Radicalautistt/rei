@@ -44,13 +44,7 @@ static void sortPrimitives (assets::gltf::Primitive* primitives, i32 low, i32 hi
   }
 }
 
-void load (
-  VkDevice device,
-  VmaAllocator allocator,
-  const vku::TransferContext* transferContext,
-  const char* relativePath,
-  Model* output) {
-
+void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* transferContext, const char* relativePath, Model* output) {
   assets::gltf::Data gltf;
   assets::gltf::load (relativePath, &gltf);
   sortPrimitives (gltf.mesh.primitives, 0, (i32) gltf.mesh.primitivesCount - 1);
@@ -63,15 +57,22 @@ void load (
     vertexCount += gltf.accessors[current->attributes.position].count;
   }
 
+  vku::Buffer stagingBuffer;
   u32 vertexOffset = 0, indexOffset = 0;
-  auto vertices = REI_MALLOC (Vertex, vertexCount);
-  auto indices = REI_MALLOC (u32, indexCount);
+  auto indexBufferSize = (VkDeviceSize) (sizeof (u32) * indexCount);
+  auto vertexBufferSize = (VkDeviceSize) (sizeof (Vertex) * vertexCount);
+
+  vku::allocateStagingBuffer (allocator, vertexBufferSize + indexBufferSize, &stagingBuffer);
+  VKC_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
+
+  auto vertices = (Vertex*) stagingBuffer.mapped;
+  auto indices = (u32*) ((u8*) stagingBuffer.mapped + vertexBufferSize);
 
   output->batches = REI_MALLOC (Batch, gltf.materialsCount);
 
-  #define GET_ACCESSOR(attribute, result) do {                                               \
-    const auto accessor = &gltf.accessors[currentPrimitive->attributes.attribute];           \
-    const auto bufferView = &gltf.bufferViews[accessor->bufferView];                         \
+  #define GET_ACCESSOR(attribute, result) do {                                           \
+    const auto accessor = &gltf.accessors[currentPrimitive->attributes.attribute];       \
+    const auto bufferView = &gltf.bufferViews[accessor->bufferView];                     \
     result = (const f32*) (&gltf.buffer[accessor->byteOffset + bufferView->byteOffset]); \
   } while (0)
 
@@ -108,7 +109,7 @@ void load (
 
     const auto accessor = &gltf.accessors[currentPrimitive->indices];
     const auto bufferView = &gltf.bufferViews[accessor->bufferView];
-    const auto indexAccessor = (const u16*) &gltf.buffer[accessor->byteOffset + bufferView->byteOffset];
+    const u16* indexAccessor = (const u16*) &gltf.buffer[accessor->byteOffset + bufferView->byteOffset];
 
     if (currentMaterial == currentPrimitive->material) {
       currentIndexCount += accessor->count;
@@ -138,56 +139,38 @@ void load (
   #undef GET_ACCESSOR
 
   {
-    vku::Buffer stagingBuffer;
-    VkDeviceSize vertexBufferSize = sizeof (Vertex) * vertexCount;
-    vku::allocateStagingBuffer (allocator, vertexBufferSize, &stagingBuffer);
+    vku::BufferAllocationInfo allocationInfo;
+    allocationInfo.size = vertexBufferSize;
+    allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
+    allocationInfo.bufferUsage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-    VKC_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
-    memcpy (stagingBuffer.mapped, vertices, vertexBufferSize);
+    vku::allocateBuffer (allocator, &allocationInfo, &output->vertexBuffer);
+
+    allocationInfo.size = indexBufferSize;
+    allocationInfo.bufferUsage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    vku::allocateBuffer (allocator, &allocationInfo, &output->indexBuffer);
+
+    VkCommandBuffer cmdBuffer;
+    vku::startImmediateCmd (device, transferContext, &cmdBuffer);
+
+    VkBufferCopy copyRegion;
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = vertexBufferSize;
+
+    vkCmdCopyBuffer (cmdBuffer, stagingBuffer.handle, output->vertexBuffer.handle, 1, &copyRegion);
+
+    copyRegion.size = indexBufferSize;
+    copyRegion.srcOffset = vertexBufferSize;
+    vkCmdCopyBuffer (cmdBuffer, stagingBuffer.handle, output->indexBuffer.handle, 1, &copyRegion);
+
+    vku::submitImmediateCmd (device, transferContext, cmdBuffer);
     vmaUnmapMemory (allocator, stagingBuffer.allocation);
-
-    {
-      vku::BufferAllocationInfo allocationInfo;
-      allocationInfo.size = vertexBufferSize;
-      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-      allocationInfo.bufferUsage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-      allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-      vku::allocateBuffer (allocator, &allocationInfo, &output->vertexBuffer);
-    }
-
-    vku::copyBuffer (device, transferContext, &stagingBuffer, &output->vertexBuffer);
     vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
   }
-
-  free (vertices);
-
-  {
-    vku::Buffer stagingBuffer;
-    VkDeviceSize indexBufferSize = sizeof (u32) * indexCount;
-    vku::allocateStagingBuffer (allocator, indexBufferSize, &stagingBuffer);
-
-    VKC_CHECK (vmaMapMemory (allocator, stagingBuffer.allocation, &stagingBuffer.mapped));
-    memcpy (stagingBuffer.mapped, indices, indexBufferSize);
-    vmaUnmapMemory (allocator, stagingBuffer.allocation);
-
-    {
-      vku::BufferAllocationInfo allocationInfo;
-      allocationInfo.size = indexBufferSize;
-      allocationInfo.memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY;
-      allocationInfo.bufferUsage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-      allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-      allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-      vku::allocateBuffer (allocator, &allocationInfo, &output->indexBuffer);
-    }
-
-    vku::copyBuffer (device, transferContext, &stagingBuffer, &output->indexBuffer);
-    vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
-  }
-
-  free (indices);
 
   output->modelMatrix = {1.f};
   math::Matrix4::scale (&output->modelMatrix, &gltf.scaleVector);
@@ -209,14 +192,7 @@ void load (
     vku::TextureAllocationInfo allocationInfo;
     REI_CHECK (assets::readImage (texturePath, &allocationInfo));
 
-    vku::allocateTexture (
-      device,
-      allocator,
-      &allocationInfo,
-      transferContext,
-      &output->textures[index]
-    );
-
+    vku::allocateTexture (device, allocator, &allocationInfo, transferContext, &output->textures[index]);
     free (allocationInfo.pixels);
   }
 
