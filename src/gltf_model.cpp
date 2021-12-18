@@ -44,7 +44,14 @@ static void sortPrimitives (assets::gltf::Primitive* primitives, i32 low, i32 hi
   }
 }
 
-void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* transferContext, const char* relativePath, Model* output) {
+void load (
+  VkDevice device,
+  VmaAllocator allocator,
+  const vku::TransferContext* transferContext,
+  VkDescriptorSetLayout descriptorLayout,
+  const char* relativePath,
+  Model* out) {
+
   assets::gltf::Data gltf;
   assets::gltf::load (relativePath, &gltf);
   sortPrimitives (gltf.mesh.primitives, 0, (i32) gltf.mesh.primitivesCount - 1);
@@ -68,7 +75,7 @@ void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* 
   auto vertices = (Vertex*) stagingBuffer.mapped;
   auto indices = (u32*) ((u8*) stagingBuffer.mapped + vertexBufferSize);
 
-  output->batches = REI_MALLOC (Batch, gltf.materialsCount);
+  out->batches = REI_MALLOC (Batch, gltf.materialsCount);
 
   #define GET_ACCESSOR(attribute, result) do {                                           \
     const auto accessor = &gltf.accessors[currentPrimitive->attributes.attribute];       \
@@ -114,7 +121,7 @@ void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* 
     if (currentMaterial == currentPrimitive->material) {
       currentIndexCount += accessor->count;
     } else {
-      auto newBatch = &output->batches[batchOffset++];
+      auto newBatch = &out->batches[batchOffset++];
       newBatch->firstIndex = firstIndex;
       newBatch->indexCount = currentIndexCount;
       newBatch->materialIndex = currentMaterial;
@@ -126,7 +133,7 @@ void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* 
 
     // FIXME This is ugly
     if (batchOffset == (gltf.materialsCount - 1)) {
-      auto newBatch = &output->batches[batchOffset];
+      auto newBatch = &out->batches[batchOffset];
       newBatch->firstIndex = indexOffset;
       newBatch->indexCount = currentIndexCount;
       newBatch->materialIndex = currentMaterial;
@@ -146,12 +153,12 @@ void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* 
     allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-    vku::allocateBuffer (allocator, &allocationInfo, &output->vertexBuffer);
+    vku::allocateBuffer (allocator, &allocationInfo, &out->vertexBuffer);
 
     allocationInfo.size = indexBufferSize;
     allocationInfo.bufferUsage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     allocationInfo.bufferUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    vku::allocateBuffer (allocator, &allocationInfo, &output->indexBuffer);
+    vku::allocateBuffer (allocator, &allocationInfo, &out->indexBuffer);
 
     VkCommandBuffer cmdBuffer;
     vku::startImmediateCmd (device, transferContext, &cmdBuffer);
@@ -161,22 +168,22 @@ void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* 
     copyRegion.dstOffset = 0;
     copyRegion.size = vertexBufferSize;
 
-    vkCmdCopyBuffer (cmdBuffer, stagingBuffer.handle, output->vertexBuffer.handle, 1, &copyRegion);
+    vkCmdCopyBuffer (cmdBuffer, stagingBuffer.handle, out->vertexBuffer.handle, 1, &copyRegion);
 
     copyRegion.size = indexBufferSize;
     copyRegion.srcOffset = vertexBufferSize;
-    vkCmdCopyBuffer (cmdBuffer, stagingBuffer.handle, output->indexBuffer.handle, 1, &copyRegion);
+    vkCmdCopyBuffer (cmdBuffer, stagingBuffer.handle, out->indexBuffer.handle, 1, &copyRegion);
 
     vku::submitImmediateCmd (device, transferContext, cmdBuffer);
     vmaUnmapMemory (allocator, stagingBuffer.allocation);
     vmaDestroyBuffer (allocator, stagingBuffer.handle, stagingBuffer.allocation);
   }
 
-  output->modelMatrix = {1.f};
-  math::Matrix4::scale (&output->modelMatrix, &gltf.scaleVector);
+  out->modelMatrix = {1.f};
+  math::Matrix4::scale (&out->modelMatrix, &gltf.scaleVector);
 
-  output->texturesCount = gltf.imagesCount;
-  output->textures = REI_MALLOC (vku::Image, gltf.imagesCount);
+  out->texturesCount = gltf.imagesCount;
+  out->textures = REI_MALLOC (vku::Image, gltf.imagesCount);
 
   char texturePath[256] {};
   strcpy (texturePath, relativePath);
@@ -192,48 +199,32 @@ void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* 
     vku::TextureAllocationInfo allocationInfo;
     REI_CHECK (assets::readImage (texturePath, &allocationInfo));
 
-    vku::allocateTexture (device, allocator, &allocationInfo, transferContext, &output->textures[index]);
+    vku::allocateTexture (device, allocator, &allocationInfo, transferContext, &out->textures[index]);
     free (allocationInfo.pixels);
   }
 
-  output->materialsCount = gltf.materialsCount;
-  output->materials = REI_MALLOC (Material, gltf.materialsCount);
+  out->materialsCount = gltf.materialsCount;
+  const u32 materialsCount = (u32) out->materialsCount;
+  auto materials = REI_MALLOC (Material, materialsCount);
 
-  for (size_t index = 0; index < gltf.materialsCount; ++index)
-    output->materials[index].albedoIndex = gltf.materials[index].baseColorTexture;
+  for (size_t i = 0; i < materialsCount; ++i)
+    materials[i].albedoIndex = gltf.materials[i].baseColorTexture;
 
   assets::gltf::destroy (&gltf);
-}
 
-void destroy (VkDevice device, VmaAllocator allocator, Model* model) {
-  vmaDestroyBuffer (allocator, model->indexBuffer.handle, model->indexBuffer.allocation);
-  vmaDestroyBuffer (allocator, model->vertexBuffer.handle, model->vertexBuffer.allocation);
-
-  vkDestroySampler (device, model->sampler, nullptr);
-  free (model->materials);
-
-  vkDestroyDescriptorPool (device, model->descriptorPool, nullptr);
-
-  for (size_t index = 0; index < model->texturesCount; ++index) {
-    auto current = &model->textures[index];
-    vkDestroyImageView (device, current->view, nullptr);
-    vmaDestroyImage (allocator, current->handle, current->allocation);
-  }
-
-  free (model->textures);
-  free (model->batches);
-}
-
-void Model::initDescriptors (VkDevice device, VkDescriptorSetLayout descriptorLayout) {
   {
-    VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, (u32) texturesCount};
+    VkDescriptorPoolSize poolSize {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, materialsCount};
 
-    VkDescriptorPoolCreateInfo createInfo {DESCRIPTOR_POOL_CREATE_INFO};
+    VkDescriptorPoolCreateInfo createInfo;
     createInfo.poolSizeCount = 1;
     createInfo.pPoolSizes = &poolSize;
-    createInfo.maxSets = (u32) materialsCount;
+    createInfo.maxSets = materialsCount;
+    createInfo.sType = DESCRIPTOR_POOL_CREATE_INFO;
 
-    VKC_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &descriptorPool));
+    createInfo.pNext = nullptr;
+    createInfo.flags = VKC_NO_FLAGS;
+
+    VKC_CHECK (vkCreateDescriptorPool (device, &createInfo, nullptr, &out->descriptorPool));
   }
 
   {
@@ -248,30 +239,34 @@ void Model::initDescriptors (VkDevice device, VkDescriptorSetLayout descriptorLa
     createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
-    VKC_CHECK (vkCreateSampler (device, &createInfo, nullptr, &sampler));
+    VKC_CHECK (vkCreateSampler (device, &createInfo, nullptr, &out->sampler));
+  }
+
+  auto writes = REI_MALLOC (VkWriteDescriptorSet, materialsCount);
+  auto imageInfos = REI_MALLOC (VkDescriptorImageInfo, materialsCount);
+  out->descriptors = REI_MALLOC (VkDescriptorSet, materialsCount);
+
+  { // Batch descriptor set allocations
+    auto descriptorLayouts = REI_ALLOCA (VkDescriptorSetLayout, materialsCount);
+    for (u32 i = 0; i < materialsCount; ++i) descriptorLayouts[i] = descriptorLayout;
+
+    VkDescriptorSetAllocateInfo allocationInfo;
+    allocationInfo.pNext = nullptr;
+    allocationInfo.pSetLayouts = descriptorLayouts;
+    allocationInfo.descriptorSetCount = materialsCount;
+    allocationInfo.descriptorPool = out->descriptorPool;
+    allocationInfo.sType = DESCRIPTOR_SET_ALLOCATE_INFO;
+
+    VKC_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, out->descriptors));
   }
 
   // Batch all descriptor writes to make a single vkUpdateDescriptorSets call.
-  auto writes = REI_MALLOC (VkWriteDescriptorSet, materialsCount);
-  auto imageInfos = REI_MALLOC (VkDescriptorImageInfo, materialsCount);
-
-  memset (writes, 0, sizeof (VkWriteDescriptorSet) * materialsCount);
-
   for (size_t index = 0; index < materialsCount; ++index) {
     auto current = &materials[index];
 
-    {
-      VkDescriptorSetAllocateInfo allocationInfo {DESCRIPTOR_SET_ALLOCATE_INFO};
-      allocationInfo.descriptorSetCount = 1;
-      allocationInfo.pSetLayouts = &descriptorLayout;
-      allocationInfo.descriptorPool = descriptorPool;
-
-      VKC_CHECK (vkAllocateDescriptorSets (device, &allocationInfo, &current->descriptorSet));
-    }
-
     auto albedoInfo = &imageInfos[index];
-    albedoInfo->sampler = sampler;
-    albedoInfo->imageView = textures[current->albedoIndex].view;
+    albedoInfo->sampler = out->sampler;
+    albedoInfo->imageView = out->textures[current->albedoIndex].view;
     albedoInfo->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     auto write = &writes[index];
@@ -279,13 +274,38 @@ void Model::initDescriptors (VkDevice device, VkDescriptorSetLayout descriptorLa
     write->descriptorCount = 1;
     write->sType = WRITE_DESCRIPTOR_SET;
     write->pImageInfo = &imageInfos[index];
-    write->dstSet = current->descriptorSet;
+    write->dstSet = out->descriptors[index];
     write->descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+    write->pNext = nullptr;
+    write->dstArrayElement = 0;
+    write->pBufferInfo = nullptr;
+    write->pTexelBufferView = nullptr;
   }
 
-  vkUpdateDescriptorSets (device, (u32) materialsCount, writes, 0, nullptr);
+  vkUpdateDescriptorSets (device, materialsCount, writes, 0, nullptr);
   free (writes);
+  free (materials);
   free (imageInfos);
+}
+
+void destroy (VkDevice device, VmaAllocator allocator, Model* model) {
+  vmaDestroyBuffer (allocator, model->indexBuffer.handle, model->indexBuffer.allocation);
+  vmaDestroyBuffer (allocator, model->vertexBuffer.handle, model->vertexBuffer.allocation);
+
+  vkDestroySampler (device, model->sampler, nullptr);
+
+  vkDestroyDescriptorPool (device, model->descriptorPool, nullptr);
+  free (model->descriptors);
+
+  for (size_t index = 0; index < model->texturesCount; ++index) {
+    auto current = &model->textures[index];
+    vkDestroyImageView (device, current->view, nullptr);
+    vmaDestroyImage (allocator, current->handle, current->allocation);
+  }
+
+  free (model->textures);
+  free (model->batches);
 }
 
 void Model::draw (VkCommandBuffer cmdBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection) {
@@ -301,7 +321,7 @@ void Model::draw (VkCommandBuffer cmdBuffer, VkPipelineLayout layout, const math
   for (size_t index = 0; index < materialsCount; ++index) {
     const auto current = &batches[index];
 
-    VKC_BIND_DESCRIPTORS (cmdBuffer, layout, 1, &materials[current->materialIndex].descriptorSet);
+    VKC_BIND_DESCRIPTORS (cmdBuffer, layout, 1, &descriptors[current->materialIndex]);
     vkCmdDrawIndexed (cmdBuffer, current->indexCount, 1, current->firstIndex, 0, 0);
   }
 }

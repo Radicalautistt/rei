@@ -486,7 +486,7 @@ void destroy (VkDevice device, Context* context) {
 
 void showDebugWindow (f32* cameraSpeed, u32* gbufferOutput, VmaAllocator allocator) {
   const ImGuiIO& io = ImGui::GetIO ();
-  ImGui::Begin ("REI Debug window");
+  ImGui::Begin ("REI debug menu");
   ImGui::SetWindowPos ({0.f, 0.f});
   ImGui::SetWindowSize ({320, 270});
 

@@ -809,20 +809,22 @@ int main () {
   }
 
   { // Create/load pipeline cache
-    VkPipelineCacheCreateInfo createInfo {PIPELINE_CACHE_CREATE_INFO};
+    VkPipelineCacheCreateInfo createInfo;
+    createInfo.pNext = nullptr;
+    createInfo.flags = VKC_NO_FLAGS;
+    createInfo.sType = PIPELINE_CACHE_CREATE_INFO;
+
     rei::File cacheFile;
     auto result = rei::readFile ("pipeline.cache", REI_TRUE, &cacheFile);
 
-    switch (result) {
-      case rei::Result::Success: {
-	REI_LOGS_INFO ("Reusing pipeline cache...");
-        createInfo.initialDataSize = cacheFile.size;
-	createInfo.pInitialData = cacheFile.contents;
-      } break;
-
-      default: {
-	REI_LOGS_INFO ("Failed to obtain pipeline cache data, creating one from scratch");
-      } break;
+    if (result == rei::Result::Success) {
+      REI_LOGS_INFO ("Reusing pipeline cache...");
+      createInfo.initialDataSize = cacheFile.size;
+      createInfo.pInitialData = cacheFile.contents;
+    } else {
+      createInfo.initialDataSize = 0;
+      createInfo.pInitialData = nullptr;
+      REI_LOGS_INFO ("Failed to obtain pipeline cache data, creating one from scratch");
     }
 
     VKC_CHECK (vkCreatePipelineCache (device, &createInfo, nullptr, &pipelineCache));
@@ -851,8 +853,14 @@ int main () {
     rei::imgui::create (device, allocator, &createInfo, &imguiContext);
   }
 
-  rei::gltf::load (device, allocator, &transferContext, "assets/models/sponza-scene/Sponza.gltf", &sponza);
-  sponza.initDescriptors (device, gbuffer.geometryPass.descriptorLayout);
+  rei::gltf::load (
+    device,
+    allocator,
+    &transferContext,
+    gbuffer.geometryPass.descriptorLayout,
+    "assets/models/sponza-scene/Sponza.gltf",
+    &sponza
+  );
 
   f32 lastTime = 0.f;
   f32 deltaTime = 0.f;

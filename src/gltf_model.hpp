@@ -8,7 +8,6 @@ namespace rei::gltf {
 
 struct Material {
   size_t albedoIndex;
-  VkDescriptorSet descriptorSet;
 };
 
 // This is used to group multiple primitives with the same material
@@ -21,8 +20,9 @@ struct Batch {
 struct Model {
   VkSampler sampler;
   VkDescriptorPool descriptorPool;
+  VkDescriptorSet* descriptors;
 
-  Material* materials;
+  // Count of descriptors and batches
   size_t materialsCount;
 
   Batch* batches;
@@ -35,11 +35,18 @@ struct Model {
 
   math::Matrix4 modelMatrix;
 
-  void initDescriptors (VkDevice device, VkDescriptorSetLayout descriptorLayout);
   void draw (VkCommandBuffer cmdBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection);
 };
 
-void load (VkDevice device, VmaAllocator allocator, const vku::TransferContext* transferContext, const char* relativePath, Model* out);
+void load (
+  VkDevice device,
+  VmaAllocator allocator,
+  const vku::TransferContext* transferContext,
+  VkDescriptorSetLayout descriptorLayout,
+  const char* relativePath,
+  Model* out
+);
+
 void destroy (VkDevice device, VmaAllocator allocator, Model* model);
 
 }
