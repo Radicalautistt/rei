@@ -1,6 +1,6 @@
-#include "math.hpp"
 #include "imgui.hpp"
 #include "window.hpp"
+#include "rei_math_types.hpp"
 
 #include <imgui/imgui.h>
 #include <VulkanMemoryAllocator/include/vk_mem_alloc.h>
@@ -91,8 +91,8 @@ void Context::renderDrawData (VkCommandBuffer cmdBuffer, u32 frameIndex, const I
   VKC_BIND_DESCRIPTORS (cmdBuffer, pipelineLayout, 1, &descriptorSet);
   vkCmdBindPipeline (cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-  math::Vector2 pushConstants {2.f / 1680.f, 2.f / 1050.f};
-  vkCmdPushConstants (cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Vector2), &pushConstants);
+  math::Vec2 pushConstants {2.f / 1680.f, 2.f / 1050.f};
+  vkCmdPushConstants (cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Vec2), &pushConstants);
 
   i32 vertexOffset = 0;
   u32 indexOffset = 0;
@@ -343,7 +343,7 @@ void create (VkDevice device, VmaAllocator allocator, const ContextCreateInfo* c
   {
     VkPushConstantRange pushConstantRange;
     pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof (math::Vector2);
+    pushConstantRange.size = sizeof (math::Vec2);
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkPipelineLayoutCreateInfo createInfo {PIPELINE_LAYOUT_CREATE_INFO};

@@ -1,8 +1,8 @@
 #ifndef GLTF_MODEL_HPP
 #define GLTF_MODEL_HPP
 
-#include "math.hpp"
 #include "vkutils.hpp"
+#include "rei_math_types.hpp"
 
 namespace rei::gltf {
 
@@ -33,9 +33,9 @@ struct Model {
   vku::Buffer vertexBuffer;
   vku::Buffer indexBuffer;
 
-  math::Matrix4 modelMatrix;
+  math::Mat4 modelMatrix;
 
-  void draw (VkCommandBuffer cmdBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection);
+  void draw (VkCommandBuffer cmdBuffer, VkPipelineLayout layout, const math::Mat4* viewProjection);
 };
 
 void load (

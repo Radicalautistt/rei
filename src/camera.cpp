@@ -1,5 +1,5 @@
-#include <math.h>
 #include "camera.hpp"
+#include "rei_math.inl"
 
 namespace rei {
 
@@ -8,13 +8,13 @@ void Camera::update () noexcept {
   front.y = sinf (math::radians (pitch));
   front.z = sinf (math::radians (yaw)) * cosf (math::radians (pitch));
 
-  math::Vector3::normalize (&front);
+  math::vec3::normalize (&front);
 
-  math::Vector3::crossProduct (&front, &worldUp, &right);
-  math::Vector3::normalize (&right);
+  math::vec3::cross (&front, &worldUp, &right);
+  math::vec3::normalize (&right);
 
-  math::Vector3::crossProduct (&right, &front, &up);
-  math::Vector3::normalize (&up);
+  math::vec3::cross (&right, &front, &up);
+  math::vec3::normalize (&up);
 }
 
 void Camera::handleMouseMovement (f32 x, f32 y) noexcept {
@@ -41,32 +41,32 @@ void Camera::move (Direction direction, f32 deltaTime) noexcept {
 
   switch (direction) {
     case Direction::Left: {
-      math::Vector3 temp;
-      math::Vector3::mulScalar (&right, velocity, &temp);
-      math::Vector3::sub (&position, &temp, &position);
+      math::Vec3 temp;
+      math::vec3::mulScalar (&right, velocity, &temp);
+      math::vec3::sub (&position, &temp, &position);
     } break;
 
     case Direction::Right: {
-      math::Vector3 temp;
-      math::Vector3::mulScalar (&right, velocity, &temp);
-      math::Vector3::add (&position, &temp, &position);
+      math::Vec3 temp;
+      math::vec3::mulScalar (&right, velocity, &temp);
+      math::vec3::add (&position, &temp, &position);
     } break;
 
     case Direction::Forward: {
-      math::Vector3 temp;
-      math::Vector3::mulScalar (&front, velocity, &temp);
-      math::Vector3::add (&position, &temp, &position);
+      math::Vec3 temp;
+      math::vec3::mulScalar (&front, velocity, &temp);
+      math::vec3::add (&position, &temp, &position);
     } break;
 
     case Direction::Backward: {
-      math::Vector3 temp;
-      math::Vector3::mulScalar (&front, velocity, &temp);
-      math::Vector3::sub (&position, &temp, &position);
+      math::Vec3 temp;
+      math::vec3::mulScalar (&front, velocity, &temp);
+      math::vec3::sub (&position, &temp, &position);
     } break;
   }
 }
 
-Camera::Camera (const math::Vector3& up, const math::Vector3& position, f32 yaw, f32 pitch)
+Camera::Camera (const math::Vec3& up, const math::Vec3& position, f32 yaw, f32 pitch)
   : firstMouse {REI_TRUE}, zoom {45.f}, speed {20.f}, sensitivity {0.1f},
   yaw {yaw}, pitch {pitch}, worldUp {up}, position {position} {
 

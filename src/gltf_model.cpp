@@ -1,9 +1,8 @@
-#include <math.h>
 #include <string.h>
-#include <stdlib.h>
 
 #include "gltf.hpp"
 #include "common.hpp"
+#include "rei_math.inl"
 #include "gltf_model.hpp"
 #include "asset_baker.hpp"
 
@@ -180,7 +179,7 @@ void load (
   }
 
   out->modelMatrix = {1.f};
-  math::Matrix4::scale (&out->modelMatrix, &gltf.scaleVector);
+  math::mat4::scale (&out->modelMatrix, &gltf.scaleVector);
 
   out->texturesCount = gltf.imagesCount;
   out->textures = REI_MALLOC (vku::Image, gltf.imagesCount);
@@ -308,15 +307,15 @@ void destroy (VkDevice device, VmaAllocator allocator, Model* model) {
   free (model->batches);
 }
 
-void Model::draw (VkCommandBuffer cmdBuffer, VkPipelineLayout layout, const math::Matrix4* viewProjection) {
+void Model::draw (VkCommandBuffer cmdBuffer, VkPipelineLayout layout, const math::Mat4* viewProjection) {
   VkDeviceSize offset = 0;
   vkCmdBindVertexBuffers (cmdBuffer, 0, 1, &vertexBuffer.handle, &offset);
   vkCmdBindIndexBuffer (cmdBuffer, indexBuffer.handle, 0, VK_INDEX_TYPE_UINT32);
 
-  math::Matrix4 matrices[2];
-  math::Matrix4::mul (viewProjection, &modelMatrix, &matrices[0]);
+  math::Mat4 matrices[2];
+  math::mat4::mul (viewProjection, &modelMatrix, &matrices[0]);
   matrices[1] = modelMatrix;
-  vkCmdPushConstants (cmdBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Matrix4) * 2, matrices);
+  vkCmdPushConstants (cmdBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof (math::Mat4) * 2, matrices);
 
   for (size_t index = 0; index < materialsCount; ++index) {
     const auto current = &batches[index];

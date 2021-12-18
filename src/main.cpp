@@ -4,6 +4,7 @@
 #include "vkutils.hpp"
 #include "vkcommon.hpp"
 #include "gltf_model.hpp"
+#include "rei_math.inl"
 
 #include <xcb/xcb.h>
 #include <imgui/imgui.h>
@@ -23,10 +24,10 @@ struct Frame {
 };
 
 struct Light {
-  rei::math::Vector4 position;
+  rei::math::Vec4 position;
   // x, y, z = color, w = radius
   // This is done to remove padding L.o.L
-  rei::math::Vector4 colorRadius;
+  rei::math::Vec4 colorRadius;
 };
 
 struct GBufferCreateInfo {
@@ -71,7 +72,7 @@ struct LightPassPushConstants {
   // 2 - normal
   // 3 - position
   u32 target;
-  rei::math::Vector4 viewPosition;
+  rei::math::Vec4 viewPosition;
 };
 
 static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBufferCreateInfo* createInfo, GBuffer* out) {
@@ -277,7 +278,7 @@ static void createGBuffer (VkDevice device, VmaAllocator allocator, const GBuffe
   {
     VkPushConstantRange pushConstant;
     pushConstant.offset = 0;
-    pushConstant.size = sizeof (rei::math::Matrix4) * 2;
+    pushConstant.size = sizeof (rei::math::Mat4) * 2;
     pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkPipelineLayoutCreateInfo info;
@@ -955,13 +956,13 @@ int main () {
     vkCmdBindPipeline (offscreenCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer.geometryPass.pipeline);
 
     {
-      rei::math::Vector3 center;
-      rei::math::Matrix4 viewMatrix;
-      rei::math::Vector3::add (&camera.position, &camera.front, &center);
+      rei::math::Vec3 center;
+      rei::math::Mat4 viewMatrix;
+      rei::math::vec3::add (&camera.position, &camera.front, &center);
       rei::math::lookAt (&camera.position, &center, &camera.up, &viewMatrix);
 
-      rei::math::Matrix4 viewProjection;
-      rei::math::Matrix4::mul (&camera.projection, &viewMatrix, &viewProjection);
+      rei::math::Mat4 viewProjection;
+      rei::math::mat4::mul (&camera.projection, &viewMatrix, &viewProjection);
       sponza.draw (offscreenCmd, gbuffer.geometryPass.pipelineLayout, &viewProjection);
     }
 
