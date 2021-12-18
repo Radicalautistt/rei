@@ -144,7 +144,7 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* out) {
   {
     // Choose swapchain extent
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
-    VKC_CHECK (vkGetPhysicalDeviceSurfaceCapabilitiesKHR (createInfo->physicalDevice, createInfo->windowSurface, &surfaceCapabilities));
+    VKC_CHECK (vkGetPhysicalDeviceSurfaceCapabilitiesKHR (createInfo->physicalDevice, createInfo->window->surface, &surfaceCapabilities));
 
     if (surfaceCapabilities.currentExtent.width != UINT32_MAX) {
       out->extent = surfaceCapabilities.currentExtent;
@@ -170,10 +170,10 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* out) {
     VkSurfaceFormatKHR surfaceFormat;
     {
       u32 count = 0;
-      VKC_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, nullptr));
+      VKC_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->window->surface, &count, nullptr));
 
       auto available = REI_ALLOCA (VkSurfaceFormatKHR, count);
-      VKC_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, available));
+      VKC_CHECK (vkGetPhysicalDeviceSurfaceFormatsKHR (createInfo->physicalDevice, createInfo->window->surface, &count, available));
 
       surfaceFormat = available[0];
       for (u32 index = 0; index < count; ++index) {
@@ -193,10 +193,10 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* out) {
     VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
     {
       u32 count = 0;
-      VKC_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, nullptr));
+      VKC_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->window->surface, &count, nullptr));
 
       auto available = REI_ALLOCA (VkPresentModeKHR, count);
-      VKC_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->windowSurface, &count, available));
+      VKC_CHECK (vkGetPhysicalDeviceSurfacePresentModesKHR (createInfo->physicalDevice, createInfo->window->surface, &count, available));
 
       for (u32 index = 0; index < count; ++index) {
         if (available[index] == VK_PRESENT_MODE_MAILBOX_KHR) {
@@ -209,7 +209,7 @@ void createSwapchain (const SwapchainCreateInfo* createInfo, Swapchain* out) {
     VkSwapchainCreateInfoKHR info {SWAPCHAIN_CREATE_INFO_KHR};
     info.clipped = VK_TRUE;
     info.presentMode = presentMode;
-    info.surface = createInfo->windowSurface;
+    info.surface = createInfo->window->surface;
     info.oldSwapchain = createInfo->oldSwapchain;
 
     info.imageArrayLayers = 1;

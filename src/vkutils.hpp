@@ -36,7 +36,6 @@ struct SwapchainCreateInfo {
   VkDevice device;
   VmaAllocator allocator;
   xcb::Window* window;
-  VkSurfaceKHR windowSurface;
   VkSwapchainKHR oldSwapchain;
   VkPhysicalDevice physicalDevice;
 };

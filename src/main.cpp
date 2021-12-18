@@ -474,7 +474,6 @@ int main () {
   VkDebugUtilsMessengerEXT debugMessenger;
   #endif
 
-  VkSurfaceKHR windowSurface;
   VkPhysicalDevice physicalDevice;
   VkDevice device;
   u32 queueFamilyIndex;
@@ -500,17 +499,6 @@ int main () {
 
   rei::Timer::init ();
   rei::vkc::Context::init ();
-
-  { // Create window
-    rei::xcb::WindowCreateInfo createInfo;
-    createInfo.x = 0;
-    createInfo.y = 0;
-    createInfo.width = 640;
-    createInfo.height = 480;
-    createInfo.name = "Rei playground";
-
-    rei::xcb::createWindow (&createInfo, &window);
-  }
 
   { // Create instance
     const char* const requiredExtensions[] {
@@ -582,15 +570,15 @@ int main () {
   }
   #endif
 
-  { // Create window surface
-    VkXcbSurfaceCreateInfoKHR createInfo;
-    createInfo.pNext = nullptr;
-    createInfo.flags = VKC_NO_FLAGS;
-    createInfo.window = window.handle;
-    createInfo.connection = window.connection;
-    createInfo.sType = XCB_SURFACE_CREATE_INFO_KHR;
+  { // Create window
+    rei::xcb::WindowCreateInfo createInfo;
+    createInfo.x = 0;
+    createInfo.y = 0;
+    createInfo.width = 640;
+    createInfo.height = 480;
+    createInfo.name = "Rei playground";
 
-    VKC_CHECK (vkCreateXcbSurfaceKHR (instance, &createInfo, nullptr, &windowSurface));
+    rei::xcb::createWindow (instance, &createInfo, &window);
   }
 
   { // Choose physical device, create logical device
@@ -600,7 +588,7 @@ int main () {
 
     rei::vku::choosePhysicalDevice (
       instance,
-      windowSurface,
+      window.surface,
       requiredExtensions,
       requiredExtensionCount,
       &indices,
@@ -686,7 +674,6 @@ int main () {
     createInfo.window = &window;
     createInfo.allocator = allocator;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
-    createInfo.windowSurface = windowSurface;
     createInfo.physicalDevice = physicalDevice;
 
     rei::vku::createSwapchain (&createInfo, &swapchain);
@@ -1101,13 +1088,12 @@ RESOURCE_CLEANUP:
 
   vmaDestroyAllocator (allocator);
   vkDestroyDevice (device, nullptr);
-  vkDestroySurfaceKHR (instance, windowSurface, nullptr);
 
   #ifndef NDEBUG
   vkDestroyDebugUtilsMessengerEXT (instance, debugMessenger, nullptr);
   #endif
 
+  rei::xcb::destroyWindow (instance, &window);
   vkDestroyInstance (instance, nullptr);
-  rei::xcb::destroyWindow (&window);
   rei::vkc::Context::shutdown ();
 }

@@ -6,6 +6,11 @@
 struct xcb_screen_t;
 struct xcb_connection_t;
 
+struct VkInstance_T;
+struct VkSurfaceKHR_T;
+typedef VkInstance_T* VkInstance;
+typedef VkSurfaceKHR_T* VkSurfaceKHR;
+
 #define KEY_W 25
 #define KEY_A 38
 #define KEY_S 39
@@ -27,12 +32,13 @@ struct Window {
   u32 handle;
   xcb_connection_t* connection;
   xcb_screen_t* screen;
+  VkSurfaceKHR surface;
 
-  void getMousePosition (f32* output);
+  void getMousePosition (f32* out);
 };
 
-void createWindow (const WindowCreateInfo* createInfo, Window* output);
-void destroyWindow (Window* window);
+void createWindow (VkInstance instance, const WindowCreateInfo* createInfo, Window* out);
+void destroyWindow (VkInstance instance, Window* window);
 
 }
 

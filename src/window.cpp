@@ -4,64 +4,65 @@
 #include <xcb/xproto.h>
 
 #include "window.hpp"
+#include "vkcommon.hpp"
 
 namespace rei::xcb {
 
-void Window::getMousePosition (f32* output) {
+void Window::getMousePosition (f32* out) {
   auto result = xcb_query_pointer_unchecked (connection, handle);
   auto reply = xcb_query_pointer_reply (connection, result, nullptr);
 
-  output[0] = (f32) reply->win_x;
-  output[1] = (f32) reply->win_y;
+  out[0] = (f32) reply->win_x;
+  out[1] = (f32) reply->win_y;
 }
 
-void createWindow (const WindowCreateInfo* createInfo, Window* output) {
-  output->width = createInfo->width;
-  output->height = createInfo->height;
+void createWindow (VkInstance instance, const WindowCreateInfo* createInfo, Window* out) {
+  out->width = createInfo->width;
+  out->height = createInfo->height;
 
-  output->connection = xcb_connect (nullptr, nullptr);
-  xcb_screen_iterator_t rootsIterator = xcb_setup_roots_iterator (xcb_get_setup (output->connection));
-  output->screen = rootsIterator.data;
-  output->handle = xcb_generate_id (output->connection);
+  out->connection = xcb_connect (nullptr, nullptr);
+  out->screen = (xcb_setup_roots_iterator (xcb_get_setup (out->connection))).data;
+  out->handle = xcb_generate_id (out->connection);
 
-  u32 valueMask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-  u32 eventMask = XCB_EVENT_MASK_EXPOSURE |
+  u32 values[] {
+    out->screen->black_pixel,
+
+    XCB_EVENT_MASK_EXPOSURE |
     XCB_EVENT_MASK_KEY_PRESS |
     XCB_EVENT_MASK_KEY_RELEASE |
 
     XCB_EVENT_MASK_BUTTON_PRESS |
     XCB_EVENT_MASK_BUTTON_RELEASE |
 
-    XCB_EVENT_MASK_POINTER_MOTION |
     XCB_EVENT_MASK_BUTTON_MOTION |
+    XCB_EVENT_MASK_POINTER_MOTION |
 
     XCB_EVENT_MASK_ENTER_WINDOW |
-    XCB_EVENT_MASK_LEAVE_WINDOW;
-
-  u32 values[] {output->screen->black_pixel, eventMask};
+    XCB_EVENT_MASK_LEAVE_WINDOW
+  };
 
   xcb_create_window (
-    output->connection,
+    out->connection,
     XCB_COPY_FROM_PARENT,
-    output->handle,
-    output->screen->root,
+    out->handle,
+    out->screen->root,
     createInfo->x,
     createInfo->y,
     createInfo->width,
     createInfo->height,
     0,
     XCB_WINDOW_CLASS_INPUT_OUTPUT,
-    output->screen->root_visual,
-    valueMask,
+    out->screen->root_visual,
+    XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK,
     values
   );
 
-  xcb_map_window (output->connection, output->handle);
+  xcb_map_window (out->connection, out->handle);
 
   xcb_change_property (
-    output->connection,
+    out->connection,
     XCB_PROP_MODE_REPLACE,
-    output->handle,
+    out->handle,
     XCB_ATOM_WM_NAME,
     XCB_ATOM_STRING,
     8,
@@ -69,10 +70,20 @@ void createWindow (const WindowCreateInfo* createInfo, Window* output) {
     createInfo->name
   );
 
-  xcb_flush (output->connection);
+  xcb_flush (out->connection);
+
+  VkXcbSurfaceCreateInfoKHR info;
+  info.pNext = nullptr;
+  info.flags = VKC_NO_FLAGS;
+  info.window = out->handle;
+  info.connection = out->connection;
+  info.sType = XCB_SURFACE_CREATE_INFO_KHR;
+
+  VKC_CHECK (vkCreateXcbSurfaceKHR (instance, &info, nullptr, &out->surface));
 }
 
-void destroyWindow (Window* window) {
+void destroyWindow (VkInstance instance, Window* window) {
+  vkDestroySurfaceKHR (instance, window->surface, nullptr);
   xcb_destroy_window (window->connection, window->handle);
   xcb_disconnect (window->connection);
 }
